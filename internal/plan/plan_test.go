@@ -60,9 +60,8 @@ func fixturePlan(t *testing.T) *plan.Plan {
 	}
 	set("talent.die", 24)
 	set("talent.dice_count", 5)
-	set("talent.flat", 1)
-	set("roots.max", 10)
-	set("roots.min", 3)
+	set("talent.flat", 4)
+	set("roots.min", 30)
 	set("chance.billion", 1)
 	p.Options = plan.Options{Decimals: true, Numbered: true}
 	p.Normalize()
