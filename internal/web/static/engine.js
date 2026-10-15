@@ -78,12 +78,10 @@
       } else {
         paid++;
         line.number = paid;
+        line.cost = lessonCost(paid);
         if (it.already_paid) {
-          // Урок уже оплачен ею самой: номер занимает, опыт не списываем.
-          line.cost = 0;
+          // Урок взят ею самой: номер занят, но опыт за него платим мы.
           line.note = 'уже куплено';
-        } else {
-          line.cost = lessonCost(paid);
         }
         if ((it.min_lesson || 1) > paid) {
           warnings.push('«' + it.title + '» требует минимум ' + it.min_lesson + '-й урок, а стоит ' + paid + '-м');
@@ -136,7 +134,8 @@
       total += cost;
       var sec = it.section || 'other';
       (bySection[sec] = bySection[sec] || []).push({
-        key: it.key, title: it.title, cost: cost, qty: qty, note: it.price || ''
+        key: it.key, title: it.title, cost: cost, qty: qty,
+        note: it.already_paid ? 'уже куплено' : (it.price || '')
       });
     });
 

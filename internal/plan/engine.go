@@ -73,13 +73,10 @@ func Compute(p *Plan) *Summary {
 			paidIdx++
 			l.Number = paidIdx
 			ordinals[item.Key] = paidIdx
-			switch {
-			case item.AlreadyPaid:
-				// Урок уже оплачен ею самой: номер занимает, опыт не списываем.
-				l.Cost = 0
+			l.Cost = LessonCost(paidIdx)
+			if item.AlreadyPaid {
+				// Урок взят ею самой: номер занят, но опыт за него платим мы.
 				l.Note = "уже куплено"
-			default:
-				l.Cost = LessonCost(paidIdx)
 			}
 			if item.MinLesson > paidIdx {
 				warnings = append(warnings,
@@ -157,8 +154,13 @@ func Compute(p *Plan) *Summary {
 		cost := item.Cost * float64(qty)
 		total += cost
 		sec := sectionOf(item)
+		note := item.priceOrNote()
+		if item.AlreadyPaid {
+			// Позиция взята ею самой: цена обычная, но помечаем это в плане.
+			note = "уже куплено"
+		}
 		lines[sec] = append(lines[sec], Line{
-			Key: item.Key, Title: displayTitle(item), Cost: cost, Qty: qty, Note: item.priceOrNote(),
+			Key: item.Key, Title: displayTitle(item), Cost: cost, Qty: qty, Note: note,
 		})
 	}
 

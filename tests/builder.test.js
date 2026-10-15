@@ -139,9 +139,25 @@ test('уже взятая позиция не снимается, а нумер�
   const summary = KT.computeSummary(st, sections);
   const lessons = summary.sections.filter((s) => s.key === 'lessons')[0];
   const first = lessons.lines.filter((l) => l.number === 1)[0];
-  assert.strictEqual(first.cost, 0, 'уже купленный урок не списывает опыт');
+  assert.strictEqual(first.cost, 5, 'опыт за уже купленный урок всё равно списывается');
   assert.strictEqual(first.note, 'уже куплено');
   assert.strictEqual(lessons.lines.filter((l) => l.number === 2)[0].cost, 10, 'следующий урок стоит 10 XP');
+});
+
+test('уже взятая заплатка в плане и помечена «уже куплено»', () => {
+  const row = rowByTitle('отключение тренировок');
+  assert.ok(row, 'заплатка видна');
+  assert.strictEqual(row.querySelector('.state.skip').disabled, true, 'снять её нельзя');
+  row.querySelector('.state.skip').click();
+  const st = state();
+  assert.ok(st.picks.some((p) => /otkluchenie_trenirovok/.test(p.key)), 'заплатка осталась в плане');
+
+  const summary = KT.computeSummary(st, sections);
+  const patches = summary.sections.filter((s) => s.key === 'patches')[0];
+  const line = patches.lines.filter((l) => /otkluchenie/.test(l.key))[0];
+  assert.ok(line, 'заплатка попала в расчёт');
+  assert.strictEqual(line.note, 'уже куплено');
+  assert.ok(exportText().indexOf('отключение тренировок') >= 0, 'заплатка есть в выгрузке');
 });
 
 test('обязательная позиция каркаса всегда в плане', () => {

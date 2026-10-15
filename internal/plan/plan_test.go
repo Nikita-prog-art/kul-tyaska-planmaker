@@ -236,15 +236,24 @@ func TestLockedAndRequirements(t *testing.T) {
 		t.Error("позиция помечена как обязательная")
 	}
 
-	// Уже купленный урок занимает первый номер и не списывает опыт.
+	// Уже взятая ею заплатка тоже обязательна и помечена в плане.
+	if !p.Picked("patch:otkluchenie_trenirovok") || !p.IsLocked("patch:otkluchenie_trenirovok") {
+		t.Error("«отключение тренировок» Ли Лун уже взяла — позиция обязана быть в плане")
+	}
+
+	// Уже купленный урок занимает первый номер, а опыт за него платим мы.
 	sum := plan.Compute(p)
 	lessons := sectionByKey(t, sum, plan.SecLessons)
 	first := lessons.Lines[0]
-	if first.Number != 1 || first.Cost != 0 {
-		t.Errorf("первый урок: номер %d, цена %v — ждал 1 и 0", first.Number, first.Cost)
+	if first.Number != 1 || first.Cost != plan.LessonCost(1) {
+		t.Errorf("первый урок: номер %d, цена %v — ждал 1 и %v", first.Number, first.Cost, plan.LessonCost(1))
 	}
 	if !strings.Contains(first.Note, "уже куплено") {
 		t.Errorf("у первого урока нет пометки «уже куплено»: %q", first.Note)
+	}
+	second := lessons.Lines[1]
+	if second.Number != 2 || second.Cost != plan.LessonCost(2) {
+		t.Errorf("второй урок: номер %d, цена %v — ждал 2 и %v", second.Number, second.Cost, plan.LessonCost(2))
 	}
 
 	// Условие про Джона Сноу: пока не взяты ни «контроль пола», ни фолиант — предупреждение.

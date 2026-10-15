@@ -55,8 +55,9 @@ type ShopItem struct {
 	// позиции всегда выбраны и снять их нельзя.
 	Locked   bool   `json:"locked,omitempty"`
 	LockNote string `json:"lock_note,omitempty"`
-	// AlreadyPaid — позиция уже оплачена в тексте: номер урока она занимает,
-	// но опыт за неё в плане не списывается.
+	// AlreadyPaid — позиция уже взята ею самой до плана: в плане печатается
+	// с пометкой «уже куплено», опыт за неё списывается как обычно, а урок
+	// занимает свой номер, так что нумерация продолжается со следующего.
 	AlreadyPaid bool `json:"already_paid,omitempty"`
 }
 
