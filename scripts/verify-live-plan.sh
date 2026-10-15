@@ -45,10 +45,10 @@ wait "$APP" 2>/dev/null || true
 echo "--- что в данных плана ---"
 printf '%s' "$PAGE" | grep -oE '"(picks|deferred|not_taken|shop|ladders|accumulators|folios)":(null|\[\])' | sort -u
 
-if printf '%s' "$PAGE" | grep -q '"picks":\[\]'; then
-    echo "ОК: конструктор получает пустые массивы"
+if printf '%s' "$PAGE" | grep -q '"picks":\['; then
+    echo "ОК: конструктор получает массив покупок"
 else
-    echo "ПЛОХО: в данных плана всё ещё null" >&2
+    echo "ПЛОХО: в данных плана нет массива picks" >&2
     exit 1
 fi
 if printf '%s' "$PAGE" | grep -qE '"(picks|deferred|shop|ladders)":null'; then
