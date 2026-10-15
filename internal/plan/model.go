@@ -149,6 +149,66 @@ type Plan struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// Normalize приводит план к предсказуемому виду: все списки — не nil
+// (иначе в JSON уезжает null, а конструктор в браузере ждёт массивы),
+// шкалы и настройки заполняются значениями по умолчанию.
+func (p *Plan) Normalize() {
+	if p.Title == "" {
+		p.Title = "Новый план"
+	}
+	if p.Shop == nil {
+		p.Shop = []ShopItem{}
+	}
+	if p.Picks == nil {
+		p.Picks = []Pick{}
+	}
+	if p.Deferred == nil {
+		p.Deferred = []Deferred{}
+	}
+	if p.NotTaken == nil {
+		p.NotTaken = []string{}
+	}
+	if p.Ladders == nil {
+		p.Ladders = DefaultLadders()
+	}
+	if p.Accumulators == nil {
+		p.Accumulators = []Accumulator{}
+	}
+	if p.Folios == nil {
+		p.Folios = []Folio{}
+	}
+	if p.Mults == nil {
+		p.Mults = []string{}
+	}
+	for i := range p.Shop {
+		it := &p.Shop[i]
+		if it.Kind == "" {
+			it.Kind = KindItem
+		}
+		if it.Section == "" {
+			it.Section = SecOther
+		}
+		if it.MinLesson < 1 {
+			it.MinLesson = 1
+		}
+		if it.Key == "" {
+			it.Key = it.Kind + ":" + Slug(it.Title)
+		}
+	}
+	for i := range p.Ladders {
+		l := &p.Ladders[i]
+		if l.Step <= 0 {
+			l.Step = 1
+		}
+		if l.Section == "" {
+			l.Section = SecOther
+		}
+		if l.Title == "" {
+			l.Title = l.Key
+		}
+	}
+}
+
 // Item ищет позицию магазина по ключу.
 func (p *Plan) Item(key string) *ShopItem {
 	for i := range p.Shop {

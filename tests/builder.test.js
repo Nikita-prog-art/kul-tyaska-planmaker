@@ -24,13 +24,32 @@ const plan = JSON.parse(fs.readFileSync(path.join(root, 'internal/plan/testdata/
 const sections = JSON.parse(fs.readFileSync(path.join(root, 'internal/plan/testdata/sections.json'), 'utf8'));
 const presets = [{ name: 'Жизнь 6 · Заскорузлые пирамиды', file: '06-zaskoruzlye-piramidy', balance: 1605.24 }];
 
-const html = `<!doctype html><html lang="ru"><body>
+// pageHtml собирает такую же страницу, какую отдаёт шаблон plan.jinja.
+function pageHtml(p) {
+  return `<!doctype html><html lang="ru"><body>
   <div class="builder" id="builder"></div>
-  <form id="kt-save" method="post" action="/plans/${plan.id}"><input type="hidden" name="state" id="kt-state"></form>
-  <script type="application/json" id="kt-plan">${JSON.stringify(plan)}</script>
+  <form id="kt-save" method="post" action="/plans/${p.id}"><input type="hidden" name="state" id="kt-state"></form>
+  <script type="application/json" id="kt-plan">${JSON.stringify(p)}</script>
   <script type="application/json" id="kt-sections">${JSON.stringify(sections)}</script>
   <script type="application/json" id="kt-presets">${JSON.stringify(presets)}</script>
 </body></html>`;
+}
+
+// bootPage поднимает страницу в jsdom и выполняет оба скрипта конструктора.
+function bootPage(p) {
+  const page = new JSDOM(pageHtml(p), { runScripts: 'outside-only', url: 'https://kultyaska.test/plans/' + p.id });
+  const w = page.window;
+  w.confirm = () => true;
+  w.alert = (msg) => { throw new Error('alert: ' + msg); };
+  w.HTMLFormElement.prototype.submit = function () {
+    w.__submitted = w.document.getElementById('kt-state').value;
+  };
+  w.eval(fs.readFileSync(path.join(root, 'internal/web/static/engine.js'), 'utf8'));
+  w.eval(fs.readFileSync(path.join(root, 'internal/web/static/builder.js'), 'utf8'));
+  return w;
+}
+
+const html = pageHtml(plan);
 
 const dom = new JSDOM(html, { runScripts: 'outside-only', url: 'https://kultyaska.test/plans/' + plan.id });
 const { window } = dom;
@@ -197,6 +216,34 @@ function stateText() {
   document.querySelector('.toolbar .btn:not(.ghost)').click();
   return state();
 }
+
+// Регрессия: только что созданный план уезжает с сервера со списками-null
+// (так сериализуется nil-срез в Go), и кнопки должны всё равно работать.
+test('план с null вместо пустых списков не ломает конструктор', () => {
+  const fresh = JSON.parse(JSON.stringify(plan));
+  fresh.picks = null;
+  fresh.deferred = null;
+  fresh.not_taken = null;
+  fresh.accumulators = null;
+  fresh.folios = null;
+  fresh.multipliers = null;
+  fresh.ladders = null;
+
+  const w = bootPage(fresh);
+  const d = w.document;
+  assert.ok(d.querySelectorAll('.row.item').length > 0, 'строки магазина отрисовались');
+
+  const row = Array.prototype.find.call(d.querySelectorAll('.row.item'), (r) =>
+    r.querySelector('.item-title').textContent.indexOf('великий успех') >= 0);
+  assert.ok(row, 'нашёл урок «великий успех»');
+
+  row.querySelector('.state.pick').click(); // до починки здесь падало на plan.picks.some
+  d.querySelector('.toolbar .btn:not(.ghost)').click(); // «Сохранить» — состояние уходит в форму
+  const st = JSON.parse(d.getElementById('kt-state').value || 'null');
+  assert.ok(st && Array.isArray(st.picks), 'состояние сохраняется массивом');
+  assert.strictEqual(st.picks.length, 1, 'покупка записалась');
+  assert.ok(d.getElementById('sum-spent').textContent.length > 0, 'суммы пересчитались');
+});
 
 if (failures) {
   console.error('\nПровалено проверок: ' + failures);

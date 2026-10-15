@@ -297,3 +297,38 @@ func TestProfilePasswordChange(t *testing.T) {
 		t.Error("новый дискорд-хендл не сохранился")
 	}
 }
+
+// TestFreshPlanShipsArrays — регрессия: у только что созданного плана все
+// списки должны уезжать в конструктор массивами, а не null.
+func TestFreshPlanShipsArrays(t *testing.T) {
+	c := newClient(t)
+	c.post("/register", url.Values{
+		"nick": {"archi"}, "discord": {"@archi"}, "password": {"verysecret1"}, "password2": {"verysecret1"},
+	})
+	resp := c.post("/plans", url.Values{"title": {"Пустой план"}, "balance": {"100"}})
+	loc := resp.Header.Get("Location")
+	if !strings.HasPrefix(loc, "/plans/") {
+		t.Fatalf("план не создался: %s", loc)
+	}
+	_, body := c.getBody(loc)
+
+	const marker = `id="kt-plan">`
+	i := strings.Index(body, marker)
+	if i < 0 {
+		t.Fatal("в конструкторе нет данных плана")
+	}
+	rest := body[i+len(marker):]
+	j := strings.Index(rest, "</script>")
+	if j < 0 {
+		t.Fatal("не нашёл конец данных плана")
+	}
+	var got map[string]any
+	if err := json.Unmarshal([]byte(rest[:j]), &got); err != nil {
+		t.Fatalf("данные плана не разбираются: %v", err)
+	}
+	for _, key := range []string{"shop", "picks", "deferred", "not_taken", "ladders", "accumulators", "folios"} {
+		if _, ok := got[key].([]any); !ok {
+			t.Errorf("%s должен быть массивом, а пришло %#v", key, got[key])
+		}
+	}
+}

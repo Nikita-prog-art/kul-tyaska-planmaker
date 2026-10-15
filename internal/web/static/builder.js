@@ -7,11 +7,33 @@
   var builder = document.getElementById('builder');
   if (!builder || !KT) return;
 
-  var plan = readJSON('kt-plan');
+  var plan = normalizePlan(readJSON('kt-plan'));
   var sections = readJSON('kt-sections') || [];
   var presets = readJSON('kt-presets') || [];
   var dirty = false;
   var filter = '';
+
+  /* Сервер может отдать план со списками-null (так уезжает nil-срез Go),
+     поэтому приводим план к предсказуемому виду до первой отрисовки. */
+  function normalizePlan(raw) {
+    var p = raw && typeof raw === 'object' ? raw : {};
+    ['shop', 'picks', 'deferred', 'not_taken', 'ladders', 'accumulators', 'folios', 'multipliers']
+      .forEach(function (key) {
+        if (!Array.isArray(p[key])) p[key] = [];
+      });
+    if (!p.options || typeof p.options !== 'object') p.options = { decimals: true, numbered: true };
+    p.balance = Number(p.balance) || 0;
+    p.earned = Number(p.earned) || 0;
+    if (!p.title) p.title = 'Новый план';
+    p.shop.forEach(function (it, i) {
+      if (!it.key) it.key = (it.kind || 'item') + ':item' + i;
+      if (!it.kind) it.kind = 'item';
+      if (!it.section) it.section = 'other';
+      it.min_lesson = Number(it.min_lesson) || 1;
+      it.cost = Number(it.cost) || 0;
+    });
+    return p;
+  }
 
   function readJSON(id) {
     var el = document.getElementById(id);

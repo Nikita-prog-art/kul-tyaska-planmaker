@@ -254,6 +254,7 @@ func (s *Store) DropSessionsUser(userID string) error {
 func (s *Store) PutPlan(p *plan.Plan) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	p.Normalize()
 	p.UpdatedAt = time.Now().UTC()
 	if p.CreatedAt.IsZero() {
 		p.CreatedAt = p.UpdatedAt
@@ -264,6 +265,7 @@ func (s *Store) PutPlan(p *plan.Plan) error {
 }
 
 // Plan возвращает план по идентификатору.
+// Normalize нужен и на чтении: в базе могли остаться планы со списками-null.
 func (s *Store) Plan(id string) (*plan.Plan, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -272,6 +274,7 @@ func (s *Store) Plan(id string) (*plan.Plan, error) {
 		return nil, ErrNotFound
 	}
 	cp := *p
+	cp.Normalize()
 	return &cp, nil
 }
 
@@ -283,6 +286,7 @@ func (s *Store) PlansByUser(userID string) ([]*plan.Plan, error) {
 	for _, p := range s.d.Plans {
 		if p.UserID == userID {
 			cp := *p
+			cp.Normalize()
 			out = append(out, &cp)
 		}
 	}

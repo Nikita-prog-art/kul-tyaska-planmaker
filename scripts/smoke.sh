@@ -41,6 +41,17 @@ EDITOR="$(curl -sS --max-time 20 -b "$JAR" "$LOC")"
 for needle in 'id="kt-plan"' 'id="kt-sections"' "пинг систем" "великий успех"; do
   if printf '%s' "$EDITOR" | grep -q "$needle"; then ok "в конструкторе есть $needle"; else bad "в конструкторе нет $needle"; fi
 done
+# Регрессия: списки должны приезжать массивами, иначе кнопки конструктора падают.
+if printf '%s' "$EDITOR" | grep -q '"picks":\[\]'; then
+  ok "покупки приезжают пустым массивом"
+else
+  bad "в данных плана нет \"picks\":[] (кнопки могут не нажиматься)"
+fi
+if printf '%s' "$EDITOR" | grep -qE '"(picks|deferred|shop|ladders)":null'; then
+  bad "в данных плана есть null вместо массива"
+else
+  ok "null вместо массивов нет"
+fi
 
 TXT="$(curl -sS --max-time 20 -b "$JAR" "$LOC/export?format=txt")"
 # План только что создан и покупок в нём нет, поэтому проверяем каркас экспорта.
