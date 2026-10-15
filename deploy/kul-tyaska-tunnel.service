@@ -1,0 +1,22 @@
+[Unit]
+Description=Cloudflare Tunnel для культяшки
+After=network-online.target kul-tyaska.service
+Wants=network-online.target
+Requires=kul-tyaska.service
+
+[Service]
+Type=simple
+# Токен туннеля лежит в /etc/kul-tyaska/tunnel.token (0600).
+# --url задаёт ingress-правило: если в дашборде Cloudflare публичные
+# хосты не описаны, весь трафик туннеля уходит на приложение.
+ExecStart=/usr/local/bin/cloudflared tunnel --no-autoupdate run --token-file /etc/kul-tyaska/tunnel.token --url http://127.0.0.1:8080
+Restart=always
+RestartSec=3
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadOnlyPaths=/etc/kul-tyaska
+
+[Install]
+WantedBy=multi-user.target

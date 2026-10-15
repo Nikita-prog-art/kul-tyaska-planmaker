@@ -1,0 +1,37 @@
+[Unit]
+Description=Культяшка — планировщик перерождений
+Documentation=https://github.com/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kultyaska
+Group=kultyaska
+WorkingDirectory=/var/lib/kultyaska
+
+Environment=KULTYASKA_ADDR=127.0.0.1:8080
+Environment=KULTYASKA_DB=/var/lib/kultyaska/kultyaska.json
+Environment=KULTYASKA_SESSION_DAYS=60
+# Трафик приходит через Cloudflare (https), поэтому куки только по https.
+# Для отладки по http поставь 0 и перезапусти сервис.
+Environment=KULTYASKA_SECURE_COOKIES=1
+
+ExecStart=/opt/kul-tyaska/kultyaska
+Restart=always
+RestartSec=2
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+ReadWritePaths=/var/lib/kultyaska
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target
