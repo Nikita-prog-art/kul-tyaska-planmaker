@@ -337,6 +337,20 @@ textarea { resize: vertical; line-height: 1.5; }
 .row.item.deferred { background: rgba(230, 192, 123, .07); box-shadow: inset 2px 0 0 var(--gold); }
 .row.item.skipped { opacity: .5; }
 .row.item.locked { box-shadow: inset 2px 0 0 var(--blood); }
+/* Позиция, которую план обязан содержать по тексту: взята ею самой или обязательна. */
+.row.item.locked-item {
+  background: linear-gradient(90deg, rgba(230, 192, 123, .07), transparent 60%);
+  box-shadow: inset 2px 0 0 var(--gold);
+}
+.row.item.locked-item .state { opacity: .45; cursor: not-allowed; }
+.row.item.locked-item.picked { box-shadow: inset 2px 0 0 var(--gold); }
+
+.req { display: flex; gap: 8px; align-items: flex-start; padding: 5px 0; font-size: 13px; border-bottom: 1px dashed var(--line-soft); }
+.req:last-child { border-bottom: none; }
+.req-mark { font-weight: 700; }
+.req.met .req-mark { color: var(--jade); }
+.req.unmet .req-mark { color: var(--blood); }
+.req.unmet .req-text { color: #ffd8b8; }
 
 .badge {
   display: grid;
@@ -385,6 +399,7 @@ textarea { resize: vertical; line-height: 1.5; }
 }
 .tag.warn { border-color: var(--blood-dim); color: #ffc9c5; }
 .tag.ok { border-color: var(--jade-dim); color: #cdf3e3; }
+.tag.lock { border-color: var(--gold-dim); color: var(--gold); }
 
 /* --- модальные панели --- */
 

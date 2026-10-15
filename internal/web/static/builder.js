@@ -17,7 +17,7 @@
      поэтому приводим план к предсказуемому виду до первой отрисовки. */
   function normalizePlan(raw) {
     var p = raw && typeof raw === 'object' ? raw : {};
-    ['shop', 'picks', 'deferred', 'not_taken', 'ladders', 'accumulators', 'folios', 'multipliers']
+    ['shop', 'picks', 'deferred', 'not_taken', 'ladders', 'accumulators', 'folios', 'multipliers', 'requirements']
       .forEach(function (key) {
         if (!Array.isArray(p[key])) p[key] = [];
       });
@@ -31,8 +31,36 @@
       if (!it.section) it.section = 'other';
       it.min_lesson = Number(it.min_lesson) || 1;
       it.cost = Number(it.cost) || 0;
+      if (it.already_paid) it.locked = true;
     });
+    enforceLocked(p);
     return p;
+  }
+
+  /* enforceLocked доставляет в план позиции, которые он обязан содержать
+     (Ли Лун уже взяла их сама или не станет смотреть план без них).
+     Уже оплаченные встают в начало очереди — в порядке магазина, — чтобы
+     нумерация уроков совпадала с текстом; остальные обязательные позиции
+     добавляются в конец: их место игрок выбирает сам. */
+  function enforceLocked(p) {
+    var have = {};
+    (p.picks || []).forEach(function (pk) { have[pk.key] = true; });
+    var front = [], back = [];
+    (p.shop || []).forEach(function (it) {
+      if (!it.locked || have[it.key]) return;
+      (it.already_paid ? front : back).push({ key: it.key, qty: 1 });
+      have[it.key] = true;
+    });
+    if (front.length || back.length) {
+      p.picks = front.concat(p.picks || [], back);
+    }
+    p.deferred = (p.deferred || []).filter(function (d) { return !isLocked(p, d.key); });
+    p.not_taken = (p.not_taken || []).filter(function (k) { return !isLocked(p, k); });
+  }
+
+  function isLocked(p, key) {
+    var it = (p.shop || []).filter(function (x) { return x.key === key; })[0];
+    return !!(it && it.locked);
   }
 
   function readJSON(id) {
@@ -180,6 +208,7 @@
     plan.earned = Number(sk.earned) || 0;
     plan.subtotal = Number(sk.subtotal) || 0;
     plan.multipliers = sk.multipliers || [];
+    plan.requirements = sk.requirements || [];
     if (sk.source) plan.source = sk.source;
     if (sk.notes) plan.notes = sk.notes;
 
@@ -187,6 +216,7 @@
       plan.picks = [];
       plan.deferred = [];
       plan.not_taken = [];
+      enforceLocked(plan);
       return true;
     }
     // Старые ключи, если совпадают по названию, переносим.
@@ -208,6 +238,7 @@
     plan.picks = remap(oldPicks, 'key');
     plan.deferred = remap(oldDeferred, 'key');
     plan.not_taken = remap(oldNotTaken, 'key').map(function (e) { return typeof e === 'string' ? e : e.key; });
+    enforceLocked(plan);
     renumberSlots();
     return true;
   }
@@ -224,7 +255,8 @@
       shop: plan.shop,
       ladders: plan.ladders,
       accumulators: plan.accumulators,
-      folios: plan.folios
+      folios: plan.folios,
+      requirements: plan.requirements || []
     }, null, 2);
   }
 
@@ -321,9 +353,41 @@
         h('div', { class: 'bar' }, [h('i', { id: 'sum-bar' })]),
         h('div', { class: 'muted small', id: 'sum-slots', text: '' })
       ]),
+      h('div', { class: 'card', id: 'kt-req' }),
       h('div', { class: 'card', id: 'kt-warnings' }),
       h('nav', { class: 'card sec-nav', id: 'kt-nav' })
     ]);
+  }
+
+  /* renderRequirements показывает условия каркаса и их выполнение. */
+  function renderRequirements() {
+    var box = document.getElementById('kt-req');
+    if (!box) return;
+    box.textContent = '';
+    var reqs = plan.requirements || [];
+    if (!reqs.length) {
+      box.hidden = true;
+      return;
+    }
+    box.hidden = false;
+    box.appendChild(h('h3', { text: 'Условия каркаса' }));
+    reqs.forEach(function (req) {
+      var keys = req.keys || [];
+      var met = req.kind === 'all_of'
+        ? keys.every(function (k) { return isPicked(k); })
+        : keys.some(function (k) { return isPicked(k); });
+      var names = keys.map(function (k) {
+        var it = item(k);
+        return it ? it.title : k;
+      });
+      box.appendChild(h('div', { class: 'req ' + (met ? 'met' : 'unmet') }, [
+        h('span', { class: 'req-mark', text: met ? '✓' : '✗' }),
+        h('span', { class: 'req-text' }, [
+          h('span', { text: (req.message || '') + ' ' }),
+          h('span', { class: 'muted small', text: '(' + (req.kind === 'all_of' ? 'нужны: ' : 'нужно одно из: ') + names.join(', ') + ')' })
+        ])
+      ]));
+    });
   }
 
   function renderSections() {
@@ -433,6 +497,13 @@
 
   function renderItem(it, sectionKey) {
     var tags = [];
+    if (it.locked) {
+      tags.push(h('span', {
+        class: 'tag lock',
+        title: it.lock_note || 'позиция обязательна по тексту',
+        text: it.already_paid ? '🔒 уже взято' : '🔒 обязательно'
+      }));
+    }
     if (it.min_lesson > 1) tags.push(h('span', { class: 'tag warn', text: 'минимум ' + it.min_lesson + '-м уроком' }));
     if ((it.tags || []).indexOf('one_chance') >= 0) tags.push(h('span', { class: 'tag warn', text: 'только один раз в жизни' }));
     if ((it.tags || []).indexOf('trophy') >= 0) tags.push(h('span', { class: 'tag', text: 'трофей' }));
@@ -442,13 +513,19 @@
     if (it.requires && it.requires.length) tags.push(h('span', { class: 'tag', text: 'нужен урок' }));
     if (it.excludes && it.excludes.length) tags.push(h('span', { class: 'tag warn', text: 'несовместимо' }));
 
+    var lockedHint = it.locked
+      ? h('div', { class: 'muted small' }, [document.createTextNode(it.lock_note || 'позиция обязательна по тексту')])
+      : null;
+
     var row = h('div', {
-      class: 'row item', dataset: { key: it.key, kind: it.kind, section: sectionKey },
+      class: 'row item' + (it.locked ? ' locked-item' : ''),
+      dataset: { key: it.key, kind: it.kind, section: sectionKey },
       title: it.desc || ''
     }, [
       h('span', { class: 'badge', dataset: { badge: it.key }, text: '' }),
       h('div', { class: 'item-main' }, [
         h('div', { class: 'item-title' }, [it.title].concat(tags)),
+        lockedHint,
         it.desc ? h('details', { class: 'item-desc' }, [
           h('summary', { text: 'описание' }),
           h('p', { text: it.desc })
@@ -458,18 +535,24 @@
       h('div', { class: 'item-state' }, [
         h('button', {
           class: 'state pick', type: 'button', dataset: { act: 'pick', key: it.key }, text: 'беру',
+          disabled: it.locked,
+          title: it.locked ? 'снять нельзя: ' + (it.lock_note || 'позиция обязательна') : '',
           onclick: function () { setState(it.key, 'pick'); }
         }),
         it.kind === 'lesson' ? h('button', {
           class: 'state defer', type: 'button', dataset: { act: 'defer', key: it.key }, text: 'невыученный',
+          disabled: it.locked,
+          title: it.locked ? 'обязательную позицию нельзя отложить' : '',
           onclick: function () { setState(it.key, 'defer'); }
         }) : null,
         h('button', {
           class: 'state skip', type: 'button', dataset: { act: 'skip', key: it.key }, text: 'не беру',
+          disabled: it.locked,
+          title: it.locked ? 'отказаться нельзя: ' + (it.lock_note || 'позиция обязательна') : '',
           onclick: function () { setState(it.key, 'skip'); }
         })
       ]),
-      it.kind === 'lesson' ? h('div', { class: 'item-order' }, [
+      it.kind === 'lesson' && !it.locked ? h('div', { class: 'item-order' }, [
         h('button', { class: 'btn tiny', type: 'button', text: '↑', title: 'выше в очереди уроков', onclick: function () { movePick(it.key, -1); } }),
         h('button', { class: 'btn tiny', type: 'button', text: '↓', title: 'ниже в очереди уроков', onclick: function () { movePick(it.key, 1); } })
       ]) : null
@@ -478,6 +561,7 @@
   }
 
   function setState(key, state) {
+    if (isLocked(plan, key)) return; // обязательные позиции не снимаются
     var picked = isPicked(key), deferred = isDeferred(key), skipped = isNotTaken(key);
     if (state === 'pick') {
       if (picked) setPick(key, false);
@@ -495,10 +579,12 @@
   }
 
   function movePick(key, dir) {
+    if (isLocked(plan, key)) return;
     var idx = pickIndex(key);
     if (idx < 0) return;
     var to = idx + dir;
     if (to < 0 || to >= plan.picks.length) return;
+    if (isLocked(plan, plan.picks[to].key)) return; // не проталкиваемся сквозь обязательные
     var tmp = plan.picks[idx];
     plan.picks[idx] = plan.picks[to];
     plan.picks[to] = tmp;
@@ -506,7 +592,8 @@
     render();
   }
 
-  /* sortPicks — жадная раскладка: сначала уроки с меньшим требованием. */
+  /* sortPicks — раскладка уроков: сначала уже оплаченные (их место задано
+     текстом), дальше по требованию «минимум n-ным», затем по порядку магазина. */
   function sortPicks() {
     var meta = {};
     plan.shop.forEach(function (it) { meta[it.key] = it; });
@@ -514,6 +601,7 @@
     plan.shop.forEach(function (it, i) { order[it.key] = i; });
     plan.picks.sort(function (a, b) {
       var A = meta[a.key] || {}, B = meta[b.key] || {};
+      if (!!A.already_paid !== !!B.already_paid) return A.already_paid ? -1 : 1;
       if (A.kind === 'lesson' && B.kind === 'lesson' && !A.fixed && !B.fixed) {
         var ma = A.min_lesson || 1, mb = B.min_lesson || 1;
         if (ma !== mb) return ma - mb;
@@ -619,6 +707,8 @@
         })));
       }
     }
+
+    renderRequirements();
 
     var nav = document.getElementById('kt-nav');
     if (nav) {
@@ -799,7 +889,8 @@
       decimals: !!(plan.options && plan.options.decimals), skeleton: plan.skeleton || '',
       earned: plan.earned || 0, multipliers: plan.multipliers || [], source: plan.source || '',
       shop: plan.shop, picks: plan.picks, deferred: plan.deferred, not_taken: plan.not_taken,
-      ladders: plan.ladders, accumulators: plan.accumulators, folios: plan.folios
+      ladders: plan.ladders, accumulators: plan.accumulators, folios: plan.folios,
+      requirements: plan.requirements || []
     };
     document.getElementById('kt-state').value = JSON.stringify(state);
     dirty = false;
@@ -843,6 +934,10 @@
 
   var search = document.getElementById('kt-search');
   if (search) search.addEventListener('input', function (e) { applyFilter(e.target.value); });
+
+  // Раскладываем уроки по требованиям сразу после загрузки каркаса,
+  // чтобы план не начинался с нарушения «минимум n-ным уроком».
+  if (hasMinViolation()) sortPicks();
 
   render();
 })();

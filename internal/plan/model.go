@@ -49,6 +49,23 @@ type ShopItem struct {
 	Desc      string   `json:"desc,omitempty"`
 	Tags      []string `json:"tags,omitempty"`
 	Price     string   `json:"price,omitempty"` // цена как в тексте: «5 XP», «трофей, 0 XP»
+
+	// Locked — позиция, которую план не может не содержать: Ли Лун уже взяла её
+	// сама или не станет рассматривать план без неё. В конструкторе такие
+	// позиции всегда выбраны и снять их нельзя.
+	Locked   bool   `json:"locked,omitempty"`
+	LockNote string `json:"lock_note,omitempty"`
+	// AlreadyPaid — позиция уже оплачена в тексте: номер урока она занимает,
+	// но опыт за неё в плане не списывается.
+	AlreadyPaid bool `json:"already_paid,omitempty"`
+}
+
+// Requirement — условие, которому должен удовлетворять план
+// (например, «взять контроль пола ИЛИ фолиант после определения пола»).
+type Requirement struct {
+	Kind    string   `json:"kind"` // any_of | all_of
+	Keys    []string `json:"keys"`
+	Message string   `json:"message"`
 }
 
 // Pick — выбранная позиция плана. Порядок в срезе = порядок покупки,
@@ -141,6 +158,7 @@ type Plan struct {
 	Accumulators []Accumulator `json:"accumulators"`
 	Folios       []Folio       `json:"folios"`
 	Ladders      []LadderCfg   `json:"ladders"`
+	Requirements []Requirement `json:"requirements,omitempty"`
 
 	Notes   string  `json:"notes,omitempty"`
 	Options Options `json:"options"`
@@ -194,6 +212,9 @@ func (p *Plan) Normalize() {
 		if it.Key == "" {
 			it.Key = it.Kind + ":" + Slug(it.Title)
 		}
+		if it.AlreadyPaid {
+			it.Locked = true
+		}
 	}
 	for i := range p.Ladders {
 		l := &p.Ladders[i]
@@ -206,6 +227,59 @@ func (p *Plan) Normalize() {
 		if l.Title == "" {
 			l.Title = l.Key
 		}
+	}
+	p.enforceLocked()
+}
+
+// enforceLocked доставляет в план позиции, которые он обязан содержать
+// (Ли Лун уже взяла их сама или не станет смотреть план без них).
+// Уже оплаченные встают в начало очереди — в порядке магазина, — чтобы
+// нумерация уроков совпадала с текстом; остальные обязательные позиции
+// добавляются в конец: их место игрок выбирает сам.
+func (p *Plan) enforceLocked() {
+	var front, back []Pick
+	have := map[string]bool{}
+	for _, pk := range p.Picks {
+		have[pk.Key] = true
+	}
+	for _, it := range p.Shop {
+		if !it.Locked || have[it.Key] {
+			continue
+		}
+		if it.AlreadyPaid {
+			front = append(front, Pick{Key: it.Key, Qty: 1})
+		} else {
+			back = append(back, Pick{Key: it.Key, Qty: 1})
+		}
+		have[it.Key] = true
+	}
+	if len(front) > 0 || len(back) > 0 {
+		picks := make([]Pick, 0, len(front)+len(p.Picks)+len(back))
+		picks = append(picks, front...)
+		picks = append(picks, p.Picks...)
+		picks = append(picks, back...)
+		p.Picks = picks
+	}
+	// Обязательную позицию нельзя отложить невыученными уроками.
+	if len(p.Deferred) > 0 {
+		kept := p.Deferred[:0]
+		for _, d := range p.Deferred {
+			if it := p.Item(d.Key); it != nil && it.Locked {
+				continue
+			}
+			kept = append(kept, d)
+		}
+		p.Deferred = kept
+	}
+	if len(p.NotTaken) > 0 {
+		kept := p.NotTaken[:0]
+		for _, k := range p.NotTaken {
+			if it := p.Item(k); it != nil && it.Locked {
+				continue
+			}
+			kept = append(kept, k)
+		}
+		p.NotTaken = kept
 	}
 }
 
@@ -235,6 +309,14 @@ func (p *Plan) IsDeferred(key string) bool {
 		if d.Key == key {
 			return true
 		}
+	}
+	return false
+}
+
+// IsLocked сообщает, обязательна ли позиция: план не может её не содержать.
+func (p *Plan) IsLocked(key string) bool {
+	if it := p.Item(key); it != nil {
+		return it.Locked
 	}
 	return false
 }

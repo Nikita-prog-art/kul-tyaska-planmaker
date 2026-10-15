@@ -72,8 +72,15 @@ func Compute(p *Plan) *Summary {
 		} else {
 			paidIdx++
 			l.Number = paidIdx
-			l.Cost = LessonCost(paidIdx)
 			ordinals[item.Key] = paidIdx
+			switch {
+			case item.AlreadyPaid:
+				// Урок уже оплачен ею самой: номер занимает, опыт не списываем.
+				l.Cost = 0
+				l.Note = "уже куплено"
+			default:
+				l.Cost = LessonCost(paidIdx)
+			}
 			if item.MinLesson > paidIdx {
 				warnings = append(warnings,
 					fmt.Sprintf("«%s» требует минимум %d-й урок, а стоит %d-м", item.Title, item.MinLesson, paidIdx))
@@ -81,6 +88,34 @@ func Compute(p *Plan) *Summary {
 		}
 		total += l.Cost
 		lines[SecLessons] = append(lines[SecLessons], l)
+	}
+
+	// Позиции, которые план обязан содержать, и условия каркаса.
+	for _, it := range p.Shop {
+		if it.Locked && !p.Picked(it.Key) {
+			warnings = append(warnings,
+				fmt.Sprintf("обязательная позиция «%s» не взята%s", it.Title, lockSuffix(&it)))
+		}
+	}
+	for _, req := range p.Requirements {
+		if req.Kind == "all_of" {
+			for _, k := range req.Keys {
+				if !p.Picked(k) {
+					warnings = append(warnings, requirementWarning(p, req, k))
+				}
+			}
+			continue
+		}
+		ok := false
+		for _, k := range req.Keys {
+			if p.Picked(k) {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			warnings = append(warnings, requirementWarning(p, req, ""))
+		}
 	}
 
 	// Отложенные уроки: попадают в план бесплатно, но не нумеруются.
@@ -139,7 +174,7 @@ func Compute(p *Plan) *Summary {
 		}
 		total += cost
 		lines[l.Section] = append(lines[l.Section], Line{
-			Key: l.Key, Title: ladderTitle(l), Cost: cost, Ladder: true, Note: l.Note,
+			Key: l.Key, Title: ladderTitle(l), Cost: cost, Ladder: true,
 		})
 	}
 
@@ -217,6 +252,42 @@ func hasTag(item *ShopItem, tag string) bool {
 		}
 	}
 	return false
+}
+
+// lockSuffix добавляет причину блокировки к предупреждению.
+func lockSuffix(it *ShopItem) string {
+	if it.LockNote != "" {
+		return ": " + it.LockNote
+	}
+	return ""
+}
+
+// requirementWarning собирает текст предупреждения по условию каркаса.
+func requirementWarning(p *Plan, req Requirement, key string) string {
+	title := req.Message
+	if title == "" {
+		var names []string
+		if key != "" {
+			names = append(names, itemTitle(p, key))
+		} else {
+			for _, k := range req.Keys {
+				names = append(names, itemTitle(p, k))
+			}
+		}
+		if req.Kind == "all_of" {
+			title = "нужно взять: " + strings.Join(names, ", ")
+		} else {
+			title = "нужно взять одно из: " + strings.Join(names, ", ")
+		}
+	}
+	return "условие каркаса не выполнено — " + title
+}
+
+func itemTitle(p *Plan, key string) string {
+	if it := p.Item(key); it != nil {
+		return displayTitle(it)
+	}
+	return key
 }
 
 func (item *ShopItem) priceOrNote() string {

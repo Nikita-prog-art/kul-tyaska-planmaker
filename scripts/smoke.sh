@@ -27,10 +27,10 @@ check "регистрация" "$(curl -sS -o /dev/null -w '%{http_code}' --max-
 
 PLANS="$(curl -sS --max-time 20 -b "$JAR" -c "$JAR" "$BASE/plans")"
 if printf '%s' "$PLANS" | grep -q "Мои планы"; then ok "страница планов"; else bad "страница планов не отдалась"; fi
-if printf '%s' "$PLANS" | grep -q "06-zaskoruzlye-piramidy"; then ok "каркас виден в списке"; else bad "каркаса нет в списке"; fi
+if printf '%s' "$PLANS" | grep -q "08-zaskoruzlye-piramidy"; then ok "каркас виден в списке"; else bad "каркаса нет в списке"; fi
 
 LOC="$(curl -sS -o /dev/null -w '%{redirect_url}' --max-time 20 -b "$JAR" -c "$JAR" \
-  -d "title=Смоук&emoji=🩸&preset=06-zaskoruzlye-piramidy" "$BASE/plans")"
+  -d "title=Смоук&emoji=🩸&preset=08-zaskoruzlye-piramidy" "$BASE/plans")"
 # curl отдаёт Location уже склеенным с базой — приводим к полному URL.
 case "$LOC" in
   /*) LOC="$BASE$LOC" ;;
@@ -42,15 +42,43 @@ for needle in 'id="kt-plan"' 'id="kt-sections"' "пинг систем" "вел�
   if printf '%s' "$EDITOR" | grep -q "$needle"; then ok "в конструкторе есть $needle"; else bad "в конструкторе нет $needle"; fi
 done
 # Регрессия: списки должны приезжать массивами, иначе кнопки конструктора падают.
-if printf '%s' "$EDITOR" | grep -q '"picks":\[\]'; then
-  ok "покупки приезжают пустым массивом"
+# Пустым «picks» уже не бывает: каркас сам добавляет обязательные позиции.
+if printf '%s' "$EDITOR" | grep -q '"picks":\['; then
+  ok "покупки приезжают массивом"
 else
-  bad "в данных плана нет \"picks\":[] (кнопки могут не нажиматься)"
+  bad "в данных плана нет массива \"picks\" (кнопки могут не нажиматься)"
 fi
 if printf '%s' "$EDITOR" | grep -qE '"(picks|deferred|shop|ladders)":null'; then
   bad "в данных плана есть null вместо массива"
 else
   ok "null вместо массивов нет"
+fi
+# Каркас жизни 8: обязательные позиции и условие встречи с Джоном Сноу.
+if printf '%s' "$EDITOR" | grep -q '"already_paid":true'; then
+  ok "уже купленный ею урок помечен already_paid"
+else
+  bad "в каркасе нет already_paid (первый урок уже куплен)"
+fi
+if printf '%s' "$EDITOR" | grep -q '"locked":true'; then
+  ok "обязательные позиции помечены locked"
+else
+  bad "в каркасе нет locked"
+fi
+if printf '%s' "$EDITOR" | grep -q '"requirements"'; then
+  ok "условия каркаса приехали"
+else
+  bad "в каркасе нет requirements"
+fi
+TXT0="$(curl -sS --max-time 20 -b "$JAR" "$LOC/export?format=txt")"
+if printf '%s' "$TXT0" | grep -q "уже куплено"; then
+  ok "в экспорте есть пометка «уже куплено»"
+else
+  bad "в экспорте нет пометки «уже куплено»"
+fi
+if printf '%s' "$TXT0" | grep -q "Джона Сноу"; then
+  ok "невыполненное условие попало в проверки"
+else
+  bad "условие каркаса не попало в проверки"
 fi
 
 TXT="$(curl -sS --max-time 20 -b "$JAR" "$LOC/export?format=txt")"
@@ -61,7 +89,7 @@ done
 
 check "страница экспорта" "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 -b "$JAR" "$LOC/export")" "200"
 check "справка по механике" "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$BASE/guide")" "200"
-check "каркас отдаётся файлом" "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$BASE/presets/06-zaskoruzlye-piramidy")" "200"
+check "каркас отдаётся файлом" "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$BASE/presets/08-zaskoruzlye-piramidy")" "200"
 check "профиль" "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 -b "$JAR" "$BASE/profile")" "200"
 check "смена пароля" "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 25 -b "$JAR" -c "$JAR" \
   -d "current=verysecret1&password=verysecret2&password2=verysecret2" "$BASE/profile/password")" "303"

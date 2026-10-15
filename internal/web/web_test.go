@@ -103,12 +103,12 @@ func TestFullFlow(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("/plans: код %d", code)
 	}
-	if !strings.Contains(body, "Мои планы") || !strings.Contains(body, "06-zaskoruzlye-piramidy") {
+	if !strings.Contains(body, "Мои планы") || !strings.Contains(body, "08-zaskoruzlye-piramidy") {
 		t.Fatal("на странице планов нет списка каркасов")
 	}
 
 	// Создание плана из каркаса.
-	resp = c.post("/plans", url.Values{"title": {"Тест"}, "emoji": {"🩸"}, "preset": {"06-zaskoruzlye-piramidy"}})
+	resp = c.post("/plans", url.Values{"title": {"Тест"}, "emoji": {"🩸"}, "preset": {"08-zaskoruzlye-piramidy"}})
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Fatalf("создание плана: код %d", resp.StatusCode)
 	}
@@ -236,7 +236,7 @@ func userIDByNick(t *testing.T, c *client, discord string) string {
 
 func TestPresetServed(t *testing.T) {
 	c := newClient(t)
-	resp := c.do("GET", "/presets/06-zaskoruzlye-piramidy", nil)
+	resp := c.do("GET", "/presets/08-zaskoruzlye-piramidy", nil)
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {

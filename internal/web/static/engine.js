@@ -78,13 +78,39 @@
       } else {
         paid++;
         line.number = paid;
-        line.cost = lessonCost(paid);
+        if (it.already_paid) {
+          // Урок уже оплачен ею самой: номер занимает, опыт не списываем.
+          line.cost = 0;
+          line.note = 'уже куплено';
+        } else {
+          line.cost = lessonCost(paid);
+        }
         if ((it.min_lesson || 1) > paid) {
           warnings.push('«' + it.title + '» требует минимум ' + it.min_lesson + '-й урок, а стоит ' + paid + '-м');
         }
       }
       total += line.cost;
       (bySection.lessons = bySection.lessons || []).push(line);
+    });
+
+    // Позиции, которые план обязан содержать, и условия каркаса.
+    (plan.shop || []).forEach(function (it) {
+      if (!it.locked) return;
+      var picked = (plan.picks || []).some(function (p) { return p.key === it.key; });
+      if (!picked) {
+        warnings.push('обязательная позиция «' + it.title + '» не взята' + (it.lock_note ? ': ' + it.lock_note : ''));
+      }
+    });
+    (plan.requirements || []).forEach(function (req) {
+      var keys = req.keys || [];
+      if (req.kind === 'all_of') {
+        keys.forEach(function (k) {
+          if (!picked(plan, k)) warnings.push(requirementWarning(plan, req, k));
+        });
+        return;
+      }
+      var ok = keys.some(function (k) { return picked(plan, k); });
+      if (!ok) warnings.push(requirementWarning(plan, req, ''));
     });
 
     // Отложенные уроки: бесплатно, без номера.
@@ -122,7 +148,7 @@
       total += cost;
       var sec = l.section || 'other';
       (bySection[sec] = bySection[sec] || []).push({
-        key: l.key, title: ladderTitle(l), cost: cost, ladder: true, note: l.note || ''
+        key: l.key, title: ladderTitle(l), cost: cost, ladder: true
       });
     });
 
@@ -162,6 +188,23 @@
     return l.title + ': ' + val + (l.unit || '');
   }
 
+  function picked(plan, key) {
+    return (plan.picks || []).some(function (p) { return p.key === key; });
+  }
+
+  function itemTitle(plan, key) {
+    var it = itemMap(plan)[key];
+    return it ? it.title : key;
+  }
+
+  /* requirementWarning — текст предупреждения по условию каркаса (как в Go). */
+  function requirementWarning(plan, req, key) {
+    if (req.message) return 'условие каркаса не выполнено — ' + req.message;
+    var names = key ? [itemTitle(plan, key)] : (req.keys || []).map(function (k) { return itemTitle(plan, k); });
+    var prefix = req.kind === 'all_of' ? 'нужно взять: ' : 'нужно взять одно из: ';
+    return 'условие каркаса не выполнено — ' + prefix + names.join(', ');
+  }
+
   function number(v) {
     v = Number(v) || 0;
     if (v === Math.round(v)) return String(Math.round(v));
@@ -180,6 +223,11 @@
     return (v < 0 ? '-' : '') + s.replace('.', ',');
   }
 
+  /* noteSuffix печатает пометку к строке плана («уже куплено» и т. п.). */
+  function noteSuffix(note) {
+    return note ? ' (' + note + ')' : '';
+  }
+
   /* renderExport(plan, summary, sections) — текст плана в принятом формате. */
   function renderExport(plan, summary, sections) {
     var dec = !!(plan.options && plan.options.decimals);
@@ -191,11 +239,11 @@
       out.push(sec.title + ':');
       sec.lines.forEach(function (l) {
         if (l.deferred) {
-          out.push('  - ' + l.title + ' (невыученный, в следующую жизнь)');
+          out.push('  - ' + l.title + ' (' + (l.note || 'невыученный, в следующую жизнь') + ')');
         } else if (l.number > 0) {
-          out.push('  ' + l.number + '. ' + l.title + ': ' + fmt(l.cost, dec));
+          out.push('  ' + l.number + '. ' + l.title + ': ' + fmt(l.cost, dec) + noteSuffix(l.note));
         } else {
-          out.push('  - ' + l.title + ': ' + fmt(l.cost, dec));
+          out.push('  - ' + l.title + ': ' + fmt(l.cost, dec) + noteSuffix(l.note));
         }
       });
       out.push('  Сумма: ' + fmt(sec.sum, dec) + ', ост. ' + fmt(sec.remainder, dec));

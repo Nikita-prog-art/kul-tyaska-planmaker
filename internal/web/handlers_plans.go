@@ -122,6 +122,7 @@ type saveState struct {
 	Ladders      []plan.LadderCfg       `json:"ladders"`
 	Accumulators []plan.Accumulator     `json:"accumulators"`
 	Folios       []plan.Folio           `json:"folios"`
+	Requirements []plan.Requirement     `json:"requirements"`
 }
 
 func (s *Server) handlePlanSave(w http.ResponseWriter, r *http.Request) {
@@ -168,6 +169,11 @@ func (s *Server) handlePlanSave(w http.ResponseWriter, r *http.Request) {
 	if st.Folios != nil {
 		p.Folios = st.Folios
 	}
+	if st.Requirements != nil {
+		p.Requirements = st.Requirements
+	}
+	// Обязательные позиции каркаса доставляются в план (см. plan.Normalize).
+	p.Normalize()
 	if err := s.st.PutPlan(p); err != nil {
 		http.Error(w, "не удалось сохранить план", http.StatusInternalServerError)
 		return

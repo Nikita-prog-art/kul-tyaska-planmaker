@@ -22,7 +22,7 @@ const { JSDOM } = require(jsdomPath);
 const KT = require(path.join(root, 'internal/web/static/engine.js'));
 const plan = JSON.parse(fs.readFileSync(path.join(root, 'internal/plan/testdata/plan.json'), 'utf8'));
 const sections = JSON.parse(fs.readFileSync(path.join(root, 'internal/plan/testdata/sections.json'), 'utf8'));
-const presets = [{ name: 'Жизнь 6 · Заскорузлые пирамиды', file: '06-zaskoruzlye-piramidy', balance: 1605.24 }];
+const presets = [{ name: 'Жизнь 8 · Заскорузлые пирамиды', file: '08-zaskoruzlye-piramidy', balance: 1605.24 }];
 
 // pageHtml собирает такую же страницу, какую отдаёт шаблон plan.jinja.
 function pageHtml(p) {
@@ -125,6 +125,42 @@ test('уроки пронумерованы, фиксированная цена
   assert.strictEqual(fixed.querySelector('.badge').textContent, '', 'фиксированный урок без номера');
 });
 
+test('уже взятая позиция не снимается, а нумерация идёт со второго урока', () => {
+  const row = rowByTitle('поцелуй Мелисандры');
+  assert.strictEqual(row.querySelector('.badge').textContent, '1', 'первый номер — у уже купленного урока');
+  ['pick', 'defer', 'skip'].forEach((act) => {
+    const btn = row.querySelector('.state.' + act);
+    if (btn) assert.strictEqual(btn.disabled, true, 'кнопка «' + act + '» заблокирована');
+  });
+  row.querySelector('.state.pick').click(); // по disabled-кнопке клик не проходит
+  const st = stateText();
+  assert.ok(st.picks.some((p) => /poceluy/.test(p.key)), 'позиция осталась в плане');
+
+  const summary = KT.computeSummary(st, sections);
+  const lessons = summary.sections.filter((s) => s.key === 'lessons')[0];
+  const first = lessons.lines.filter((l) => l.number === 1)[0];
+  assert.strictEqual(first.cost, 0, 'уже купленный урок не списывает опыт');
+  assert.strictEqual(first.note, 'уже куплено');
+  assert.strictEqual(lessons.lines.filter((l) => l.number === 2)[0].cost, 10, 'следующий урок стоит 10 XP');
+});
+
+test('обязательная позиция каркаса всегда в плане', () => {
+  const row = rowByTitle('пинг систем');
+  assert.strictEqual(row.querySelector('.state.skip').disabled, true, '«не беру» для обязательной позиции закрыто');
+  assert.ok(row.textContent.indexOf('обязательно') >= 0, 'у позиции есть пометка');
+});
+
+test('условие каркаса про Джона Сноу видно и проверяется', () => {
+  const before = document.getElementById('kt-req');
+  assert.ok(before && before.textContent.indexOf('Джона Сноу') >= 0, 'условие показано');
+  assert.ok(before.querySelector('.unmet'), 'сначала условие не выполнено');
+
+  rowByTitle('контроль пола').querySelector('.state.pick').click();
+  const after = document.getElementById('kt-req');
+  assert.ok(after.querySelector('.met'), 'после «контроля пола» условие выполнено');
+  assert.strictEqual(after.querySelectorAll('.unmet').length, 0, 'невыполненных условий не осталось');
+});
+
 test('«беру» добавляет урок, цена следующего растёт на 5', () => {
   const before = KT.computeSummary(plan, sections);
   const row = rowByTitle('сама себе безоар');
@@ -171,11 +207,11 @@ test('шкала таланта считается по шагам', () => {
 
 test('поиск фильтрует строки', () => {
   const box = document.getElementById('kt-search');
-  box.value = 'талант';
+  box.value = 'метод';
   box.dispatchEvent(new window.Event('input', { bubbles: true }));
   const visible = Array.prototype.filter.call(document.querySelectorAll('.row.item'), (r) => !r.hidden);
   assert.ok(visible.length > 0, 'что-то осталось');
-  assert.ok(visible.every((r) => r.querySelector('.item-title').textContent.toLowerCase().indexOf('талант') >= 0),
+  assert.ok(visible.every((r) => r.querySelector('.item-title').textContent.toLowerCase().indexOf('метод') >= 0),
     'остались только совпадения');
   box.value = '';
   box.dispatchEvent(new window.Event('input', { bubbles: true }));
@@ -241,7 +277,8 @@ test('план с null вместо пустых списков не ломае�
   d.querySelector('.toolbar .btn:not(.ghost)').click(); // «Сохранить» — состояние уходит в форму
   const st = JSON.parse(d.getElementById('kt-state').value || 'null');
   assert.ok(st && Array.isArray(st.picks), 'состояние сохраняется массивом');
-  assert.strictEqual(st.picks.length, 1, 'покупка записалась');
+  assert.ok(st.picks.some((p) => /velikiy_uspeh/.test(p.key)), 'выбранный урок записался');
+  assert.ok(st.picks.some((p) => /poceluy/.test(p.key)), 'обязательная позиция каркаса тоже на месте');
   assert.ok(d.getElementById('sum-spent').textContent.length > 0, 'суммы пересчитались');
 });
 

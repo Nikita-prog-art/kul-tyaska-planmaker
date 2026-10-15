@@ -14,7 +14,7 @@ import (
 var update = flag.Bool("update", false, "перезаписать эталонные файлы")
 
 // presetPath — каркас, на котором строятся эталоны.
-const presetPath = "../web/presets/06-zaskoruzlye-piramidy.json"
+const presetPath = "../web/presets/08-zaskoruzlye-piramidy.json"
 
 // fixturePlan собирает детерминированный план: он же используется
 // в node-тесте tests/engine.test.js, чтобы JS и Go считали одинаково.
@@ -30,14 +30,15 @@ func fixturePlan(t *testing.T) *plan.Plan {
 	}
 	p := sk.NewPlan("user-1", "План «всё влезет»", "🔥")
 	p.Picks = []plan.Pick{
-		{Key: "patch:zerkalo_slavy"},
+		{Key: "patch:otkluchenie_trenirovok"},
 		{Key: "lesson:velikiy_uspeh"},
 		{Key: "lesson:uchene_svet"},
 		{Key: "lesson:prirozhdennyy_alhimik"},
 		{Key: "lesson:da_sdohni_zhe"},
 		{Key: "lesson:professionalnaya_deva", Qty: 1},
 		{Key: "lesson:posledniy_boy"},
-		{Key: "lesson:poceluy_melisandry"},
+		// «поцелуй Мелисандры» не перечисляем: его Ли Лун уже купила сама,
+		// и Normalize сам поставит его первым уроком.
 		{Key: "lesson:ping_sistem"},
 		{Key: "lesson:metod_neproglyadnogo_tumana"},
 		{Key: "item:bazovoe_vyzhivanie", Qty: 1},
@@ -64,6 +65,7 @@ func fixturePlan(t *testing.T) *plan.Plan {
 	set("roots.min", 3)
 	set("chance.billion", 1)
 	p.Options = plan.Options{Decimals: true, Numbered: true}
+	p.Normalize()
 	return p
 }
 
@@ -209,4 +211,89 @@ func TestEmptyPlanCostsNothing(t *testing.T) {
 	if sum.Total != 0 {
 		t.Errorf("несуществующая позиция не должна стоить ничего, получил %v", sum.Total)
 	}
+}
+
+// TestLockedAndRequirements — позиции, которые Ли Лун уже взяла сама,
+// и условия каркаса: план не должен им противоречить.
+func TestLockedAndRequirements(t *testing.T) {
+	raw, err := os.ReadFile(presetPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sk, err := plan.ParseSkeleton(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p := sk.NewPlan("u1", "Проверка", "")
+	if !p.Picked("lesson:poceluy_melisandry") {
+		t.Error("уже купленный ею урок должен быть в плане")
+	}
+	if !p.Picked("lesson:ping_sistem") {
+		t.Error("обязательный урок должен быть в плане")
+	}
+	if !p.IsLocked("lesson:ping_sistem") {
+		t.Error("позиция помечена как обязательная")
+	}
+
+	// Уже купленный урок занимает первый номер и не списывает опыт.
+	sum := plan.Compute(p)
+	lessons := sectionByKey(t, sum, plan.SecLessons)
+	first := lessons.Lines[0]
+	if first.Number != 1 || first.Cost != 0 {
+		t.Errorf("первый урок: номер %d, цена %v — ждал 1 и 0", first.Number, first.Cost)
+	}
+	if !strings.Contains(first.Note, "уже куплено") {
+		t.Errorf("у первого урока нет пометки «уже куплено»: %q", first.Note)
+	}
+
+	// Условие про Джона Сноу: пока не взяты ни «контроль пола», ни фолиант — предупреждение.
+	if !hasWarning(sum.Warnings, "Джона Сноу") {
+		t.Errorf("ждал предупреждение об условии каркаса, получил %v", sum.Warnings)
+	}
+	p.Picks = append(p.Picks, plan.Pick{Key: "item:vybor_pola"})
+	p.Normalize()
+	if hasWarning(plan.Compute(p).Warnings, "Джона Сноу") {
+		t.Error("после «контроля пола» условие должно выполняться")
+	}
+
+	// Обязательную позицию нельзя отложить невыученными уроками.
+	p.Deferred = []plan.Deferred{{Key: "lesson:ping_sistem", Slot: 1}}
+	p.Normalize()
+	if p.IsDeferred("lesson:ping_sistem") {
+		t.Error("обязательную позицию нельзя отложить")
+	}
+
+	// Если обязательную позицию всё же убрать — конструктор обязан предупредить.
+	p2 := sk.NewPlan("u2", "Без пинга", "")
+	kept := p2.Picks[:0]
+	for _, pk := range p2.Picks {
+		if pk.Key != "lesson:ping_sistem" {
+			kept = append(kept, pk)
+		}
+	}
+	p2.Picks = kept
+	if !hasWarning(plan.Compute(p2).Warnings, "обязательная позиция «пинг систем»") {
+		t.Errorf("ждал предупреждение об отсутствующей обязательной позиции, получил %v", plan.Compute(p2).Warnings)
+	}
+}
+
+func sectionByKey(t *testing.T, sum *plan.Summary, key string) plan.SectionSummary {
+	t.Helper()
+	for _, s := range sum.Sections {
+		if s.Key == key {
+			return s
+		}
+	}
+	t.Fatalf("нет секции %s", key)
+	return plan.SectionSummary{}
+}
+
+func hasWarning(list []string, sub string) bool {
+	for _, w := range list {
+		if strings.Contains(w, sub) {
+			return true
+		}
+	}
+	return false
 }

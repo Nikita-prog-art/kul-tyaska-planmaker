@@ -21,6 +21,9 @@ type Skeleton struct {
 	Ladders      []LadderCfg   `json:"ladders,omitempty"`
 	Accumulators []Accumulator `json:"accumulators,omitempty"`
 	Folios       []Folio       `json:"folios,omitempty"`
+	// Requirements — условия, которым обязан удовлетворять план
+	// (например, «контроль пола» ИЛИ «взять фолиант после определения пола»).
+	Requirements []Requirement `json:"requirements,omitempty"`
 }
 
 // ParseSkeleton читает каркас из JSON.
@@ -92,7 +95,36 @@ func (s *Skeleton) Normalize() error {
 			it.Key += "_"
 		}
 		seen[it.Key] = true
+		// Уже оплаченную позицию план обязан содержать.
+		if it.AlreadyPaid {
+			it.Locked = true
+		}
+		if it.Locked && it.LockNote == "" {
+			it.LockNote = "обязательная позиция каркаса"
+		}
 	}
+	// Условия каркаса: ключи должны существовать в магазине.
+	var reqs []Requirement
+	for _, req := range s.Requirements {
+		if req.Kind == "" {
+			req.Kind = "any_of"
+		}
+		var keys []string
+		for _, k := range req.Keys {
+			for _, it := range s.Shop {
+				if it.Key == k {
+					keys = append(keys, k)
+					break
+				}
+			}
+		}
+		if len(keys) == 0 {
+			continue
+		}
+		req.Keys = keys
+		reqs = append(reqs, req)
+	}
+	s.Requirements = reqs
 	for i := range s.Accumulators {
 		a := &s.Accumulators[i]
 		if a.Max <= 0 {
@@ -110,21 +142,24 @@ func (s *Skeleton) NewPlan(userID, title, emoji string) *Plan {
 	if strings.TrimSpace(title) == "" {
 		title = s.Name
 	}
-	return &Plan{
+	p := &Plan{
 		ID: newID(), UserID: userID, Title: title, Emoji: emoji,
-		Balance:  s.Balance,
-		Skeleton: s.Name,
-		Earned:   s.Earned,
-		Subtotal: s.Subtotal,
-		Mults:    s.Multipliers,
-		Source:   s.Source,
-		Notes:    s.Notes,
-		Shop:     s.Shop,
-		Ladders:  s.Ladders,
+		Balance:      s.Balance,
+		Skeleton:     s.Name,
+		Earned:       s.Earned,
+		Subtotal:     s.Subtotal,
+		Mults:        s.Multipliers,
+		Source:       s.Source,
+		Notes:        s.Notes,
+		Shop:         s.Shop,
+		Ladders:      s.Ladders,
 		Accumulators: s.Accumulators,
-		Folios:   s.Folios,
-		Options:  Options{Decimals: true, Numbered: true},
+		Folios:       s.Folios,
+		Requirements: s.Requirements,
+		Options:      Options{Decimals: true, Numbered: true},
 	}
+	p.Normalize()
+	return p
 }
 
 // EmptyPlan создаёт план без каркаса: только базовые шкалы.

@@ -21,11 +21,15 @@ func Render(p *Plan, s *Summary) string {
 		for _, l := range sec.Lines {
 			switch {
 			case l.Deferred:
-				fmt.Fprintf(&b, "  - %s (невыученный, в следующую жизнь)\n", l.Title)
+				note := l.Note
+				if note == "" {
+					note = "невыученный, в следующую жизнь"
+				}
+				fmt.Fprintf(&b, "  - %s (%s)\n", l.Title, note)
 			case l.Number > 0:
-				fmt.Fprintf(&b, "  %d. %s: %s\n", l.Number, l.Title, money(p, l.Cost))
+				fmt.Fprintf(&b, "  %d. %s: %s%s\n", l.Number, l.Title, money(p, l.Cost), noteSuffix(l.Note))
 			default:
-				fmt.Fprintf(&b, "  - %s: %s\n", l.Title, money(p, l.Cost))
+				fmt.Fprintf(&b, "  - %s: %s%s\n", l.Title, money(p, l.Cost), noteSuffix(l.Note))
 			}
 		}
 		fmt.Fprintf(&b, "  Сумма: %s, ост. %s\n\n", money(p, sec.Sum), money(p, sec.Remainder))
@@ -103,6 +107,14 @@ func Render(p *Plan, s *Summary) string {
 		fmt.Fprintf(&b, "\n%s\n", strings.TrimSpace(p.Notes))
 	}
 	return b.String()
+}
+
+// noteSuffix печатает пометку к строке плана («уже куплено» и т. п.).
+func noteSuffix(note string) string {
+	if note == "" {
+		return ""
+	}
+	return " (" + note + ")"
 }
 
 // DeferredUsedKeys возвращает краткие названия отложенных уроков в порядке слотов.
