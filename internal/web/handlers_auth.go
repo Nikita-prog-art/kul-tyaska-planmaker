@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"kultyaska/internal/auth"
@@ -119,6 +120,12 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "не удалось создать сессию", http.StatusInternalServerError)
 		return
 	}
+	// Временный пароль своё отслужил: дальше пусть будет свой.
+	u.LastLogin = time.Now().UTC()
+	if u.TempPassword != "" {
+		u.TempPassword = ""
+	}
+	_ = s.st.UpdateUser(u)
 	s.setSession(w, sess.Token, sess.Expires)
 	if next == "" {
 		next = "/plans"

@@ -98,6 +98,9 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("GET /presets/{name}", s.handlePreset)
 	mux.HandleFunc("GET /guide", s.handleGuide)
+	mux.HandleFunc("GET /profile", s.auth(s.handleProfile))
+	mux.HandleFunc("POST /profile/password", s.auth(s.handleProfilePassword))
+	mux.HandleFunc("POST /profile/discord", s.auth(s.handleProfileDiscord))
 	mux.HandleFunc("GET /admin", s.auth(s.adminOnly(s.handleAdmin)))
 	mux.HandleFunc("POST /admin/reset", s.auth(s.adminOnly(s.handleAdminReset)))
 	mux.HandleFunc("POST /admin/toggle", s.auth(s.adminOnly(s.handleAdminToggle)))

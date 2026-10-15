@@ -1,0 +1,42 @@
+{% extends "templates/base.jinja" %}
+{% block content %}
+<section class="head-row">
+  <div>
+    <h1>Профиль</h1>
+    <p class="muted">Ник <b>{{ profile.nick }}</b> · дискорд <b>{{ profile.discord }}</b> · планов: {{ profile.plans }} · с {{ profile.created }}</p>
+  </div>
+  {% if profile.is_admin %}<span class="chip ok">админ</span>{% endif %}
+</section>
+
+{% if profile.temp %}
+<div class="alert">Сейчас действует временный пароль из админки — задай свой, и он перестанет работать.</div>
+{% endif %}
+
+<section class="panel">
+  <h2>Смена пароля</h2>
+  <form class="form" method="post" action="/profile/password">
+    <label>Текущий пароль
+      <input type="password" name="current" autocomplete="current-password" required>
+    </label>
+    <label>Новый пароль
+      <input type="password" name="password" minlength="8" autocomplete="new-password" required>
+      <small>Не короче 8 символов.</small>
+    </label>
+    <label>Новый пароль ещё раз
+      <input type="password" name="password2" minlength="8" autocomplete="new-password" required>
+    </label>
+    <button class="btn" type="submit">Сменить пароль</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Дискорд-хендл</h2>
+  <p class="muted small">По нему выдаётся доступ, если пароль забудется. Поправь, если при регистрации ошибся.</p>
+  <form class="form" method="post" action="/profile/discord">
+    <label>Дискорд
+      <input name="discord" value="{{ profile.discord }}" required>
+    </label>
+    <button class="btn ghost" type="submit">Сохранить</button>
+  </form>
+</section>
+{% endblock %}

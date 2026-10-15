@@ -51,6 +51,9 @@ done
 check "страница экспорта" "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 -b "$JAR" "$LOC/export")" "200"
 check "справка по механике" "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$BASE/guide")" "200"
 check "каркас отдаётся файлом" "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$BASE/presets/06-zaskoruzlye-piramidy")" "200"
+check "профиль" "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 -b "$JAR" "$BASE/profile")" "200"
+check "смена пароля" "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 25 -b "$JAR" -c "$JAR" \
+  -d "current=verysecret1&password=verysecret2&password2=verysecret2" "$BASE/profile/password")" "303"
 # Админка доступна только первому (или назначенному) пользователю — 403 это нормально.
 ADMIN_CODE="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 -b "$JAR" "$BASE/admin")"
 if [ "$ADMIN_CODE" = "200" ]; then ok "админка ($ADMIN_CODE, тестовый ник — админ)"

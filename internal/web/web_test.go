@@ -250,3 +250,50 @@ func TestPresetServed(t *testing.T) {
 		t.Errorf("в каркасе мало позиций: %d", len(sk.Shop))
 	}
 }
+
+func TestProfilePasswordChange(t *testing.T) {
+	c := newClient(t)
+	c.post("/register", url.Values{
+		"nick": {"archi"}, "discord": {"@archi"}, "password": {"verysecret1"}, "password2": {"verysecret1"},
+	})
+
+	code, body := c.getBody("/profile")
+	if code != 200 || !strings.Contains(body, "@archi") {
+		t.Fatalf("профиль: код %d", code)
+	}
+
+	// Неверный текущий пароль — ошибка, пароль не меняется.
+	c.post("/profile/password", url.Values{"current": {"нет"}, "password": {"newsecret1"}, "password2": {"newsecret1"}})
+	c.post("/logout", nil)
+	if resp := c.post("/login", url.Values{"nick": {"archi"}, "password": {"verysecret1"}}); resp.StatusCode != http.StatusSeeOther {
+		t.Fatal("старый пароль перестал работать после неудачной смены")
+	}
+	c.post("/logout", nil)
+	if resp := c.post("/login", url.Values{"nick": {"archi"}, "password": {"newsecret1"}}); resp.StatusCode == http.StatusSeeOther {
+		t.Fatal("пароль сменился, хотя текущий был указан неверно")
+	}
+
+	// Верный текущий пароль — пароль меняется.
+	if resp := c.post("/login", url.Values{"nick": {"archi"}, "password": {"verysecret1"}}); resp.StatusCode != http.StatusSeeOther {
+		t.Fatal("не вошёл старым паролем")
+	}
+	if resp := c.post("/profile/password", url.Values{"current": {"verysecret1"}, "password": {"newsecret1"}, "password2": {"newsecret1"}}); resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("смена пароля: код %d", resp.StatusCode)
+	}
+	c.post("/logout", nil)
+	if resp := c.post("/login", url.Values{"nick": {"archi"}, "password": {"verysecret1"}}); resp.StatusCode == http.StatusSeeOther {
+		t.Error("старый пароль всё ещё работает")
+	}
+	if resp := c.post("/login", url.Values{"nick": {"archi"}, "password": {"newsecret1"}}); resp.StatusCode != http.StatusSeeOther {
+		t.Error("новый пароль не работает")
+	}
+
+	// Дискорд-хендл можно поправить.
+	if resp := c.post("/profile/discord", url.Values{"discord": {"@archi#9999"}}); resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("смена дискорда: код %d", resp.StatusCode)
+	}
+	_, body = c.getBody("/admin")
+	if !strings.Contains(body, "@archi#9999") {
+		t.Error("новый дискорд-хендл не сохранился")
+	}
+}

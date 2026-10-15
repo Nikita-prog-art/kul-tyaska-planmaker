@@ -18,7 +18,7 @@
       <a href="/plans" class="{% if nav == 'plans' %}active{% endif %}">Планы</a>
       <a href="/guide" class="{% if nav == 'guide' %}active{% endif %}">Механика</a>
       {% if user.is_admin %}<a href="/admin" class="{% if nav == 'admin' %}active{% endif %}">Админка</a>{% endif %}
-      <span class="who" title="дискорд: {{ user.discord }}">{{ user.nick }}</span>
+      <a href="/profile" class="who {% if nav == 'profile' %}active{% endif %}" title="профиль · дискорд: {{ user.discord }}">{{ user.nick }}</a>
       <form method="post" action="/logout" class="inline"><button class="btn ghost" type="submit">Выйти</button></form>
     {% else %}
       <a href="/login" class="{% if nav == 'login' %}active{% endif %}">Вход</a>
