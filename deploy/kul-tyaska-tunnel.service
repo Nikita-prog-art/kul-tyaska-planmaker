@@ -1,8 +1,9 @@
 [Unit]
 Description=Cloudflare Tunnel для культяшки
 After=network-online.target kul-tyaska.service
-Wants=network-online.target
-Requires=kul-tyaska.service
+Wants=network-online.target kul-tyaska.service
+# Requires намеренно не ставим: остановка приложения не должна гасить туннель,
+# а рестарт приложения поднимается сам.
 
 [Service]
 Type=simple
