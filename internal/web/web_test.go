@@ -1,0 +1,252 @@
+package web_test
+
+import (
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/cookiejar"
+	"net/http/httptest"
+	"net/url"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"kultyaska/internal/config"
+	"kultyaska/internal/plan"
+	"kultyaska/internal/store"
+	"kultyaska/internal/web"
+)
+
+type client struct {
+	t    *testing.T
+	srv  *httptest.Server
+	http *http.Client
+}
+
+func newClient(t *testing.T) *client {
+	t.Helper()
+	st, err := store.Open(filepath.Join(t.TempDir(), "db.json"))
+	if err != nil {
+		t.Fatalf("хранилище: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	cfg := config.Config{Addr: "127.0.0.1:0", DBPath: ":memory:", SessionTTL: time.Hour, Admins: []string{"archi"}}
+	srv, err := web.New(cfg, st)
+	if err != nil {
+		t.Fatalf("сервер: %v", err)
+	}
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts.Close)
+	jar, _ := cookiejar.New(nil)
+	return &client{t: t, srv: ts, http: &http.Client{Jar: jar, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
+}
+
+func (c *client) do(method, path string, form url.Values) *http.Response {
+	c.t.Helper()
+	var body io.Reader
+	if form != nil {
+		body = strings.NewReader(form.Encode())
+	}
+	req, err := http.NewRequest(method, c.srv.URL+path, body)
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	if form != nil {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	return resp
+}
+
+func (c *client) getBody(path string) (int, string) {
+	c.t.Helper()
+	resp := c.do("GET", path, nil)
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, string(raw)
+}
+
+func (c *client) post(path string, form url.Values) *http.Response {
+	c.t.Helper()
+	resp := c.do("POST", path, form)
+	_, _ = io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+	return resp
+}
+
+func TestPagesRequireAuth(t *testing.T) {
+	c := newClient(t)
+	resp := c.post("/plans", nil)
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("без сессии /plans должен редиректить, получил %d", resp.StatusCode)
+	}
+	if loc := resp.Header.Get("Location"); !strings.HasPrefix(loc, "/login") {
+		t.Errorf("редирект не на логин: %s", loc)
+	}
+}
+
+func TestFullFlow(t *testing.T) {
+	c := newClient(t)
+
+	// Регистрация: первый пользователь становится админом.
+	resp := c.post("/register", url.Values{
+		"nick": {"archi"}, "discord": {"@archi"}, "password": {"verysecret1"}, "password2": {"verysecret1"},
+	})
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("регистрация: код %d", resp.StatusCode)
+	}
+	code, body := c.getBody("/plans")
+	if code != 200 {
+		t.Fatalf("/plans: код %d", code)
+	}
+	if !strings.Contains(body, "Мои планы") || !strings.Contains(body, "06-zaskoruzlye-piramidy") {
+		t.Fatal("на странице планов нет списка каркасов")
+	}
+
+	// Создание плана из каркаса.
+	resp = c.post("/plans", url.Values{"title": {"Тест"}, "emoji": {"🩸"}, "preset": {"06-zaskoruzlye-piramidy"}})
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("создание плана: код %d", resp.StatusCode)
+	}
+	planURL := resp.Header.Get("Location")
+	if !strings.HasPrefix(planURL, "/plans/") {
+		t.Fatalf("неожиданный редирект: %s", planURL)
+	}
+
+	// Конструктор отдаёт JSON плана и секции.
+	code, body = c.getBody(planURL)
+	if code != 200 {
+		t.Fatalf("конструктор: код %d", code)
+	}
+	for _, want := range []string{`id="kt-plan"`, `id="kt-sections"`, "builder.js", "engine.js", "пинг систем"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("в конструкторе нет %q", want)
+		}
+	}
+
+	// Сохранение состояния и проверка экспорта.
+	state := map[string]any{
+		"title": "Праведность без контроля пола", "emoji": "🩸", "balance": 1605.24148,
+		"decimals": true, "skeleton": "тест",
+		"shop": []map[string]any{
+			{"key": "lesson:a", "kind": "lesson", "section": "lessons", "title": "отмена детской смертности", "fixed": true, "cost": 1},
+			{"key": "lesson:b", "kind": "lesson", "section": "lessons", "title": "демонические культиваторы — зло", "min_lesson": 1, "cost": 0},
+		},
+		"picks":    []map[string]any{{"key": "lesson:a"}, {"key": "lesson:b"}},
+		"deferred": []map[string]any{},
+		"not_taken": []string{"lesson:b"},
+		"ladders": []map[string]any{{"key": "talent.die", "section": "talent", "title": "кость таланта", "from": 1, "to": 5, "step": 1, "value": 2, "cost": map[string]any{"type": "to_value", "rate": 1}}},
+	}
+	raw, _ := json.Marshal(state)
+	resp = c.post(planURL, url.Values{"state": {string(raw)}})
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("сохранение: код %d", resp.StatusCode)
+	}
+
+	code, body = c.getBody(planURL + "/export")
+	if code != 200 {
+		t.Fatalf("экспорт: код %d", code)
+	}
+	if !strings.Contains(body, "Остаток:") || !strings.Contains(body, "отмена детской смертности") {
+		t.Error("на странице экспорта нет текста плана")
+	}
+
+	resp = c.do("GET", planURL+"/export?format=txt", nil)
+	txt, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/plain") {
+		t.Errorf("ожидал text/plain, получил %s", ct)
+	}
+	if !strings.Contains(string(txt), "Невыученные: —") {
+		t.Errorf("в .txt нет блока невыученных:\n%s", txt)
+	}
+	// Урок с фиксированной ценой не занимает номер.
+	if !strings.Contains(string(txt), "1. демонические культиваторы — зло: 5") {
+		t.Errorf("нумерация уроков считается неверно:\n%s", txt)
+	}
+}
+
+func TestEscapingAndAdmin(t *testing.T) {
+	c := newClient(t)
+	c.post("/register", url.Values{
+		"nick": {"archi"}, "discord": {"@archi#1"}, "password": {"verysecret1"}, "password2": {"verysecret1"},
+	})
+
+	resp := c.post("/plans", url.Values{"title": {`<script>alert(1)</script>`}})
+	planURL := resp.Header.Get("Location")
+	_, body := c.getBody(planURL)
+	if strings.Contains(body, "<script>alert(1)</script>") {
+		t.Error("название плана не экранируется — XSS")
+	}
+
+	code, body := c.getBody("/admin")
+	if code != 200 {
+		t.Fatalf("админка: код %d", code)
+	}
+	if !strings.Contains(body, "@archi#1") {
+		t.Error("в админке нет дискорд-хендла")
+	}
+
+	// Пароль сбрасываем второму игроку: себе сброс закрывает свою же сессию.
+	if resp := c.post("/logout", nil); resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("выход: код %d", resp.StatusCode)
+	}
+	if resp := c.post("/register", url.Values{
+		"nick": {"guest"}, "discord": {"@guest#2"}, "password": {"verysecret1"}, "password2": {"verysecret1"},
+	}); resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("регистрация второго игрока: код %d", resp.StatusCode)
+	}
+	if resp := c.post("/logout", nil); resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("выход гостя: код %d", resp.StatusCode)
+	}
+	if resp := c.post("/login", url.Values{"nick": {"archi"}, "password": {"verysecret1"}}); resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("повторный вход админом: код %d", resp.StatusCode)
+	}
+	if resp := c.post("/admin/reset", url.Values{"user_id": {userIDByNick(t, c, "@guest#2")}}); resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("сброс пароля: код %d", resp.StatusCode)
+	}
+	_, body = c.getBody("/admin")
+	if !strings.Contains(body, "временный пароль") {
+		t.Error("временный пароль не показан в админке")
+	}
+}
+
+// userIDByNick выцепляет id пользователя по его дискорд-хендлу на странице админки.
+func userIDByNick(t *testing.T, c *client, discord string) string {
+	t.Helper()
+	_, body := c.getBody("/admin")
+	idx := strings.Index(body, discord)
+	if idx < 0 {
+		t.Fatalf("в админке нет %s", discord)
+	}
+	// Формы сброса идут в той же строке таблицы, сразу после дискорда.
+	tail := body[idx:]
+	const marker = `name="user_id" value="`
+	i := strings.Index(tail, marker)
+	if i < 0 {
+		t.Fatalf("не нашёл id пользователя %s", discord)
+	}
+	rest := tail[i+len(marker):]
+	return rest[:strings.Index(rest, `"`)]
+}
+
+func TestPresetServed(t *testing.T) {
+	c := newClient(t)
+	resp := c.do("GET", "/presets/06-zaskoruzlye-piramidy", nil)
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		t.Fatalf("каркас: код %d", resp.StatusCode)
+	}
+	sk, err := plan.ParseSkeleton(raw)
+	if err != nil {
+		t.Fatalf("каркас не разбирается: %v", err)
+	}
+	if len(sk.Shop) < 30 {
+		t.Errorf("в каркасе мало позиций: %d", len(sk.Shop))
+	}
+}

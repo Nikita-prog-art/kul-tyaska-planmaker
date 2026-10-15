@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }} · Культяшка</title>
+<link rel="stylesheet" href="/static/app.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🩸</text></svg>">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">
+    <span class="brand-mark">仙</span>
+    <span class="brand-text">Культяшка<small>планировщик перерождений</small></span>
+  </a>
+  <nav class="nav">
+    {% if user %}
+      <a href="/plans" class="{% if nav == 'plans' %}active{% endif %}">Планы</a>
+      <a href="/guide" class="{% if nav == 'guide' %}active{% endif %}">Механика</a>
+      {% if user.is_admin %}<a href="/admin" class="{% if nav == 'admin' %}active{% endif %}">Админка</a>{% endif %}
+      <span class="who" title="дискорд: {{ user.discord }}">{{ user.nick }}</span>
+      <form method="post" action="/logout" class="inline"><button class="btn ghost" type="submit">Выйти</button></form>
+    {% else %}
+      <a href="/login" class="{% if nav == 'login' %}active{% endif %}">Вход</a>
+      <a class="btn" href="/register">Регистрация</a>
+    {% endif %}
+  </nav>
+</header>
+
+{% if flash %}<div class="flash">✦ {{ flash }}</div>{% endif %}
+{% if error %}<div class="alert">⚠ {{ error }}</div>{% endif %}
+
+<main class="page">
+{% block content %}{% endblock %}
+</main>
+
+<footer class="foot">
+  <span>Культивируй. Умри. Начни сначала.</span>
+  <span>v{{ version }} · {{ year }}</span>
+</footer>
+{% block scripts %}{% endblock %}
+</body>
+</html>

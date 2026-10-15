@@ -1,0 +1,57 @@
+{% extends "templates/base.jinja" %}
+{% block content %}
+<section class="head-row">
+  <div>
+    <h1>Экспорт плана</h1>
+    <p class="muted">{{ plan.emoji }} {{ plan.title }}{% if plan.skeleton %} · каркас: {{ plan.skeleton }}{% endif %}</p>
+  </div>
+  <div class="row gap">
+    <a class="btn ghost" href="/plans/{{ plan.id }}">← В конструктор</a>
+    <a class="btn" href="/plans/{{ plan.id }}/export?format=txt">Скачать .txt</a>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="stat-row">
+    <div class="stat"><span class="muted small">Баланс</span><b>{{ plan.balance }}</b></div>
+    <div class="stat"><span class="muted small">Потрачено</span><b>{{ total }}</b></div>
+    <div class="stat"><span class="muted small">Остаток</span><b>{{ remainder }}</b></div>
+    <div class="stat"><span class="muted small">Уроков</span><b>{{ summary.sections|length }}</b></div>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="row between">
+    <h2>Текст плана</h2>
+    <button class="btn ghost small" id="copy-export" type="button">Скопировать</button>
+  </div>
+  <textarea class="export-text" id="export-text" rows="28" readonly>{{ export_text }}</textarea>
+</section>
+
+{% if summary.warnings %}
+<section class="panel">
+  <h2>Проверки</h2>
+  <ul class="warn-list">
+    {% for w in summary.warnings %}<li>{{ w }}</li>{% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  var btn = document.getElementById('copy-export');
+  var area = document.getElementById('export-text');
+  if (!btn || !area) return;
+  btn.addEventListener('click', function () {
+    area.select();
+    try {
+      if (navigator.clipboard) { navigator.clipboard.writeText(area.value); }
+      else { document.execCommand('copy'); }
+      btn.textContent = 'Скопировано';
+      setTimeout(function () { btn.textContent = 'Скопировать'; }, 1500);
+    } catch (e) { btn.textContent = 'Скопируйте вручную'; }
+  });
+})();
+</script>
+{% endblock %}

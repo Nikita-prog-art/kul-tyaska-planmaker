@@ -1,0 +1,18 @@
+{% extends "templates/base.jinja" %}
+{% block content %}
+<section class="auth">
+  <h1>Вход</h1>
+  <p class="muted">Ник и пароль. Дискорд-хендл нужен, чтобы вернуть доступ, если пароль потеряется.</p>
+  <form method="post" action="/login" class="form">
+    <input type="hidden" name="next" value="{{ next }}">
+    <label>Ник
+      <input name="nick" value="{{ nick }}" autocomplete="username" required autofocus>
+    </label>
+    <label>Пароль
+      <input type="password" name="password" autocomplete="current-password" required>
+    </label>
+    <button class="btn big" type="submit">Войти</button>
+  </form>
+  <p class="muted">Нет аккаунта? <a href="/register">Зарегистрироваться</a>.</p>
+</section>
+{% endblock %}

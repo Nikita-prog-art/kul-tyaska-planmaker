@@ -1,0 +1,24 @@
+{% extends "templates/base.jinja" %}
+{% block content %}
+<section class="auth">
+  <h1>Регистрация</h1>
+  <p class="muted">Ник, дискорд-хендл и пароль. Дискорд не проверяется — по нему я выдам доступ, если пароль забудется.</p>
+  <form method="post" action="/register" class="form">
+    <label>Ник
+      <input name="nick" value="{{ nick }}" maxlength="24" autocomplete="username" required autofocus>
+      <small>3–24 символа: буквы, цифры, «_», «-», «.», «@».</small>
+    </label>
+    <label>Дискорд-хендл
+      <input name="discord" value="{{ discord }}" placeholder="например, arhivarius#1234 или @arhivarius" required>
+    </label>
+    <label>Пароль
+      <input type="password" name="password" minlength="8" autocomplete="new-password" required>
+    </label>
+    <label>Пароль ещё раз
+      <input type="password" name="password2" minlength="8" autocomplete="new-password" required>
+    </label>
+    <button class="btn big" type="submit">Создать аккаунт</button>
+  </form>
+  <p class="muted">Уже есть аккаунт? <a href="/login">Войти</a>.</p>
+</section>
+{% endblock %}

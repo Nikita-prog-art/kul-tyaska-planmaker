@@ -1,0 +1,22 @@
+{% extends "templates/base.jinja" %}
+{% block content %}
+<script type="application/json" id="kt-plan">{{ plan_json|safe }}</script>
+<script type="application/json" id="kt-sections">{{ sections|safe }}</script>
+<script type="application/json" id="kt-presets">{{ presets_json|safe }}</script>
+
+<div class="builder" id="builder">
+  <div class="builder-loading">Собираю конструктор…</div>
+</div>
+
+<form id="kt-save" method="post" action="/plans/{{ plan.id }}" hidden>
+  <input type="hidden" name="state" id="kt-state">
+</form>
+
+<noscript>
+  <div class="alert">Конструктор работает в браузере, поэтому нужен включённый JavaScript.</div>
+</noscript>
+{% endblock %}
+{% block scripts %}
+<script src="/static/engine.js"></script>
+<script src="/static/builder.js"></script>
+{% endblock %}

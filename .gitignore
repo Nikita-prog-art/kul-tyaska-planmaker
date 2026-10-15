@@ -31,3 +31,10 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# локальные кэши сборки
+.cache/
+
+# собранные бинарники
+/kul-tyaska
+/dist/

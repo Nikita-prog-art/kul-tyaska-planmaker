@@ -1,0 +1,772 @@
+{
+  "id": "6ca04ff415b442f7a502f995",
+  "user_id": "user-1",
+  "title": "План «всё влезет»",
+  "emoji": "🔥",
+  "balance": 1605.24148,
+  "skeleton": "Жизнь 6 · континент Заскорузлых пирамид",
+  "earned": 1596.672,
+  "subtotal": 672,
+  "multipliers": [
+    "Женский пол: ×1,5",
+    "Слабая фауна: ×0,9",
+    "Баланс Ци: ×1",
+    "Средний континент: ×1",
+    "Объединённый: ×0,8",
+    "Сражающийся: ×1,1",
+    "Тип смерти. Героическая насильственная смерть после совершённого подвига: ×2"
+  ],
+  "shop": [
+    {
+      "key": "lesson:ping_sistem",
+      "section": "lessons",
+      "kind": "lesson",
+      "title": "пинг систем",
+      "cost": 0,
+      "fixed": false,
+      "min_lesson": 10,
+      "once": false,
+      "desc": "Можно взять как минимум десятым уроком. Связывает систему с системой Джона Сноу: каждое его перерождение платное, цена может расти."
+    },
+    {
+      "key": "lesson:velikiy_uspeh",
+      "section": "lessons",
+      "kind": "lesson",
+      "title": "великий успех",
+      "cost": 0,
+      "fixed": false,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "Накопитель «великий успех»: заряжается не жизнями, а выдающимися обстоятельствами. Полный заряд — гарантированно ценная находка в 5, 10 или 15 лет."
+    },
+    {
+      "key": "lesson:zarad_velikogo_uspeha",
+      "section": "lessons",
+      "kind": "lesson",
+      "title": "заряд великого успеха",
+      "cost": 100,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "Фиксированная цена, не идёт в счётчик уроков. Добавляет один заряд в накопитель великого успеха."
+    },
+    {
+      "key": "lesson:maksimum_zaradov",
+      "section": "lessons",
+      "kind": "lesson",
+      "title": "максимум зарядов великого успеха",
+      "cost": 0,
+      "fixed": false,
+      "min_lesson": 2,
+      "once": false,
+      "desc": "Можно взять как минимум вторым уроком. Поднимает максимум зарядов накопителя до 2."
+    },
+    {
+      "key": "lesson:uchene_svet",
+      "section": "lessons",
+      "kind": "lesson",
+      "title": "ученье — свет!",
+      "cost": 0,
+      "fixed": false,
+      "min_lesson": 4,
+      "once": false,
+      "desc": "Можно взять как минимум четвёртым уроком. +10% к экзаменам и освоению техник, +2 к алхимии, артефакторике и талисманам."
+    },
+    {
+      "key": "lesson:uchene_svet_5",
+      "section": "lessons",
+      "kind": "lesson",
+      "title": "ученье — свет! (повтор)",
+      "cost": 0,
+      "fixed": false,
+      "min_lesson": 4,
+      "once": false,
+      "desc": "Повторная возможность: ещё +10% к экзаменам и освоению техник. Появляется, когда знания расширяются снова."
+    },
+    {
+      "key": "lesson:diletantka_shirokogo_profilya",
+      "section": "lessons",
+      "kind": "lesson",
+      "title": "дилетантка широкого профиля",
+      "cost": 0,
+      "fixed": false,
+      "min_lesson": 7,
+      "once": false,
+      "desc": "Можно взять как минимум седьмым уроком. +1% к наблюдательности и проницательности, +2% к воле, +3% к общению и интригам."
+    },
+    {
+      "key": "lesson:prirozhdennyy_alhimik",
+      "section": "lessons",
+      "kind": "lesson",
+      "title": "прирождённый алхимик",
+      "cost": 0,
+      "fixed": false,
+      "min_lesson": 6,
+      "once": false,
+      "desc": "Можно взять как минимум шестым уроком. +10 при изучении алхимии, отключает критический провал при изготовлении снадобий."
+    },
+    {
+      "key": "lesson:sama_sebe_bezoar",
+      "section": "lessons",
+      "kind": "lesson",
+      "title": "сама себе безоар",
+      "cost": 0,
+      "fixed": false,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "+10% к сопротивляемости ядам."
+    },
+    {
+      "key": "lesson:da_sdohni_zhe",
+      "section": "lessons",
+      "kind": "lesson",
+      "title": "да сдохни же ты наконец!",
+      "cost": 0,
+      "fixed": false,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "+5% к стойкости и воле: то, что придётся слышать от демонических культиваторов."
+    },
+    {
+      "key": "lesson:professionalnaya_deva",
+      "section": "lessons",
+      "kind": "lesson",
+      "title": "профессиональная Дева-в-Беде",
+      "cost": 5,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "Фиксированная цена. Навык «базовое обольщение (мужчины)»: +5%, только в женских перерождениях."
+    },
+    {
+      "key": "lesson:nenavizhu_yady",
+      "section": "lessons",
+      "kind": "lesson",
+      "title": "ненавижу яды!",
+      "cost": 0,
+      "fixed": false,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "+5% к сопротивляемости ядам."
+    },
+    {
+      "key": "lesson:prodlenie_bitvy",
+      "section": "lessons",
+      "kind": "lesson",
+      "title": "продление битвы",
+      "cost": 0,
+      "fixed": false,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "+5% к испытаниям воли: иногда воля нужна, чтобы сражаться, уже будучи мёртвой."
+    },
+    {
+      "key": "lesson:posledniy_boy",
+      "section": "lessons",
+      "kind": "lesson",
+      "title": "последний бой",
+      "cost": 0,
+      "fixed": false,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "+2% к атаке и защите; с уроком «пинг систем» бонус вырастает до +4%/+4%."
+    },
+    {
+      "key": "lesson:poceluy_melisandry",
+      "section": "lessons",
+      "kind": "lesson",
+      "title": "поцелуй Мелисандры",
+      "cost": 0,
+      "fixed": false,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "Сохраняет душу Джона Сноу для ещё одного перерождения. Его перерождение стоит 200 XP."
+    },
+    {
+      "key": "lesson:povyshenie_chistoty_korney",
+      "section": "lessons",
+      "kind": "lesson",
+      "title": "повышение чистоты корней",
+      "cost": 0,
+      "fixed": false,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "+1 к чистоте корней. Выдаётся каждый раз при провале прорыва на стадию Накопления Ци."
+    },
+    {
+      "key": "lesson:metod_ognennogo_vodopada",
+      "section": "folio",
+      "kind": "lesson",
+      "title": "метод Огненного Водопада (освоено)",
+      "cost": 5,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "Плохое качество, вплоть до Накопления Ци. Огонь, вода, водопад. Общая чистота 70%, огненных корней 40%, водных 10%. Метод включает технику Струящегося Огненного Потока.",
+      "tags": [
+        "osvoeno",
+        "trophy"
+      ]
+    },
+    {
+      "key": "lesson:metod_neproglyadnogo_tumana",
+      "section": "folio",
+      "kind": "lesson",
+      "title": "метод Непроглядного Тумана (освоено)",
+      "cost": 50,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "Необычное качество, вплоть до Закладывания Фундамента. Огонь, вода, туман, дождь. Общая чистота 60%, огненных 40%, водных 20%. Техники: Завеса Огненных Капель, Всесжигающий Огненный Дождь, Сокрытие В Тумане, Стремительная Огненная Капля, Подсвечивающие Огни.",
+      "tags": [
+        "osvoeno"
+      ]
+    },
+    {
+      "key": "lesson:metod_tonkogo_pogloscheniya",
+      "section": "folio",
+      "kind": "lesson",
+      "title": "метод Утончённого Поглощения Чистой Инь",
+      "cost": 40,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "Трофей. Необычное качество, от Накопления Ци до Закладывания Фундамента. Демонический (совращённый ортодоксальный), женский, инь, травничество. Характеристики скрыты до первого прорыва на Закладывание Фундамента.",
+      "tags": [
+        "trophy"
+      ]
+    },
+    {
+      "key": "lesson:metod_yadovityh_miazmov",
+      "section": "folio",
+      "kind": "lesson",
+      "title": "метод Ядовитых Миазмов",
+      "cost": 50,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "Трофей. Необычное качество, вплоть до Закладывания Фундамента. Универсальный, яд, миазмы, пальма. При регулярном поглощении минимальных доз яда ускоряет культивацию на 1,1.",
+      "tags": [
+        "trophy"
+      ]
+    },
+    {
+      "key": "lesson:vodnoe_teloslozhenie",
+      "section": "physique",
+      "kind": "lesson",
+      "title": "водное телосложение (обычное)",
+      "cost": 0,
+      "fixed": false,
+      "min_lesson": 4,
+      "once": false,
+      "desc": "Можно взять как минимум четвёртым уроком. Добавляется в неактивные телосложения: активировать можно, только деактивировав огненное."
+    },
+    {
+      "key": "lesson:rodoslovnaya_raduzhnoy_foreli",
+      "section": "bloodline",
+      "kind": "lesson",
+      "title": "родословная Радужной Форели (обычная)",
+      "cost": 0,
+      "fixed": false,
+      "min_lesson": 4,
+      "once": false,
+      "desc": "Можно взять как минимум четвёртым уроком. Чешуя (+2% защиты), лучше плавание, водные корни, бонусы к водным методам."
+    },
+    {
+      "key": "patch:otkluchenie_trenirovok",
+      "section": "patches",
+      "kind": "patch",
+      "title": "отключение тренировок",
+      "cost": 0,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "Позволяет отключать ненужные в следующей жизни тренировки. Деактивация и возврат бесплатны."
+    },
+    {
+      "key": "patch:bliznecy",
+      "section": "patches",
+      "kind": "patch",
+      "title": "близнецы",
+      "cost": 10,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "2% шанс родиться одним из близнецов. Избранные «один на миллион у вас дома» и «один на миллиард» тоже могут родиться твоими близнецами."
+    },
+    {
+      "key": "patch:uslovnyy_otstoy",
+      "section": "patches",
+      "kind": "patch",
+      "title": "условный отстой",
+      "cost": 20,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "Позволяет заранее прописать условия, при которых уроки «ортодоксальные культиваторы — отстой» не работают."
+    },
+    {
+      "key": "patch:zerkalo_slavy",
+      "section": "patches",
+      "kind": "patch",
+      "title": "зеркало славы",
+      "cost": 0,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "Автоматически убирает эффекты сияния славы Вечных Императоров в момент смерти."
+    },
+    {
+      "key": "patch:osvoenie_foliantov",
+      "section": "patches",
+      "kind": "patch",
+      "title": "освоение фолиантов",
+      "cost": 0,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "Освоенный однажды фолиант в следующих жизнях осваивается на 50% быстрее."
+    },
+    {
+      "key": "patch:ploskiy_bonus",
+      "section": "patches",
+      "kind": "patch",
+      "title": "плоский бонус к таланту",
+      "cost": 0,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "Перебалансирует плоский бонус: его можно брать каждый раз, когда кость таланта кратна четырём."
+    },
+    {
+      "key": "patch:teloslozheniya_i_rodoslovnye",
+      "section": "patches",
+      "kind": "patch",
+      "title": "разнообразные телосложения и родословные",
+      "cost": 10,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "Вводит неактивные телосложения и родословные: активное по-прежнему одно, неактивных — сколько угодно."
+    },
+    {
+      "key": "item:trinadcatyy_meridian",
+      "section": "other",
+      "kind": "item",
+      "title": "тринадцатый меридиан",
+      "cost": 10000,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "Автоматически обнаруживает местонахождение тринадцатого меридиана после открытия первых двенадцати. Цена падает вдвое на Золотом Ядре и ещё вдвое на стадии Ищущего Дао."
+    },
+    {
+      "key": "item:vospominaniya_o_zemle",
+      "section": "other",
+      "kind": "item",
+      "title": "воспоминания о прошлом Земли",
+      "cost": 1000,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "Разблокирует воспоминания нулевой жизни. Один из пререквизитов перерождения с сохранением памяти."
+    },
+    {
+      "key": "item:effektivnost_barera",
+      "section": "other",
+      "kind": "item",
+      "title": "эффективность барьера +1%",
+      "cost": 100,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "На стадии Накопления Ци. Максимум 40%."
+    },
+    {
+      "key": "item:effektivnost_rezervov",
+      "section": "other",
+      "kind": "item",
+      "title": "эффективность резервов +1%",
+      "cost": 100,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "На стадии Накопления Ци. Максимум 40%."
+    },
+    {
+      "key": "item:effektivnost_tehnik",
+      "section": "other",
+      "kind": "item",
+      "title": "эффективность техник +1%",
+      "cost": 50,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "На стадии Накопления Ци, для техник всех стихий. Максимум 40%."
+    },
+    {
+      "key": "item:ravnovesie_zla_i_dobra",
+      "section": "accumulators",
+      "kind": "item",
+      "title": "накопитель «равновесие зла и добра»",
+      "cost": 20,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "Заряд сдвигает рождение на две градации в сторону демонического, трата заряда — на одну градацию в сторону ортодоксального. После траты нужно переждать одну жизнь."
+    },
+    {
+      "key": "item:skidka_na_tele",
+      "section": "other",
+      "kind": "item",
+      "title": "скидка на деактивацию телосложений (200 XP)",
+      "cost": 1000,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "Постоянная скидка на деактивацию телосложений. За каждое неактивное телосложение цена скидки меньше на 10 XP."
+    },
+    {
+      "key": "item:bazovoe_vyzhivanie",
+      "section": "trainings",
+      "kind": "item",
+      "title": "базовое выживание на природе",
+      "cost": 2,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "Охота на мелкую дичь, сбор даров природы, обустройство лагеря."
+    },
+    {
+      "key": "item:uchenica_kopiya",
+      "section": "trainings",
+      "kind": "item",
+      "title": "ученица короткого копья",
+      "cost": 5,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "+5% попасть и +1% защититься коротким копьём, полностью вступает в силу не раньше 10 лет."
+    },
+    {
+      "key": "item:diletantka_schita",
+      "section": "trainings",
+      "kind": "item",
+      "title": "дилетантка щита",
+      "cost": 2,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "+2% защититься щитом."
+    },
+    {
+      "key": "item:uchenica_alhimika",
+      "section": "trainings",
+      "kind": "item",
+      "title": "ученица алхимика",
+      "cost": 10,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "Курс ученика алхимии осваивается за один год."
+    },
+    {
+      "key": "item:lestnica_v_nebo",
+      "section": "trainings",
+      "kind": "item",
+      "title": "лестница в небо",
+      "cost": 5,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "+1% к шансу прорыва на стадию Накопления Ци. Можно купить дважды."
+    },
+    {
+      "key": "folio:vzyat_1_foliant",
+      "section": "folio",
+      "kind": "folio",
+      "title": "взять 1 фолиант (максимум 3)",
+      "cost": 10,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "Позволяет пронести фолиант в следующую жизнь, получив к нему доступ на стадии Накопления Ци."
+    },
+    {
+      "key": "folio:vzyat_posle_pola",
+      "section": "folio",
+      "kind": "folio",
+      "title": "взять фолиант после определения пола",
+      "cost": 50,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "Возможность брать фолианты непосредственно перед перерождением, после определения чистоты и стихийной окраски корней."
+    },
+    {
+      "key": "chance:odin_na_milliard",
+      "section": "chances",
+      "kind": "item",
+      "title": "шанс «один на миллиард»",
+      "cost": 200,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "Отдельный раздел шансов. Подробности не разъясняются."
+    },
+    {
+      "key": "chance:odin_na_million",
+      "section": "chances",
+      "kind": "item",
+      "title": "шанс «один на миллион»",
+      "cost": 50,
+      "fixed": true,
+      "min_lesson": 1,
+      "once": false,
+      "desc": "Следующая ступень после «одного на миллиард»."
+    }
+  ],
+  "picks": [
+    {
+      "key": "patch:zerkalo_slavy"
+    },
+    {
+      "key": "lesson:velikiy_uspeh"
+    },
+    {
+      "key": "lesson:uchene_svet"
+    },
+    {
+      "key": "lesson:prirozhdennyy_alhimik"
+    },
+    {
+      "key": "lesson:da_sdohni_zhe"
+    },
+    {
+      "key": "lesson:professionalnaya_deva",
+      "qty": 1
+    },
+    {
+      "key": "lesson:posledniy_boy"
+    },
+    {
+      "key": "lesson:poceluy_melisandry"
+    },
+    {
+      "key": "lesson:ping_sistem"
+    },
+    {
+      "key": "lesson:metod_neproglyadnogo_tumana"
+    },
+    {
+      "key": "item:bazovoe_vyzhivanie",
+      "qty": 1
+    },
+    {
+      "key": "item:uchenica_kopiya",
+      "qty": 1
+    },
+    {
+      "key": "item:lestnica_v_nebo",
+      "qty": 1
+    }
+  ],
+  "deferred": [
+    {
+      "key": "lesson:metod_ognennogo_vodopada",
+      "slot": 1
+    }
+  ],
+  "not_taken": [
+    "lesson:povyshenie_chistoty_korney",
+    "lesson:nenavizhu_yady"
+  ],
+  "accumulators": [
+    {
+      "key": "acc:gorozhane",
+      "name": "горожане",
+      "activate": true,
+      "charges": 0.8,
+      "max": 1,
+      "rate": 20,
+      "note": "рождение горожанином"
+    },
+    {
+      "key": "acc:okrestnosti_mu",
+      "name": "окрестности суперконтинента Му",
+      "activate": false,
+      "charges": 0.03,
+      "max": 1,
+      "rate": 1,
+      "note": "рождение рядом с Му или на нём"
+    },
+    {
+      "key": "acc:velikiy_uspeh",
+      "name": "великий успех",
+      "activate": false,
+      "charges": 0.4,
+      "max": 1,
+      "rate": 0,
+      "note": "заряжается только выдающимися обстоятельствами"
+    }
+  ],
+  "folios": [
+    {
+      "key": "folio:metod_neproglyadnogo_tumana",
+      "name": "метод Непроглядного Тумана",
+      "take": true,
+      "deferred": false,
+      "cost": "50 XP"
+    }
+  ],
+  "ladders": [
+    {
+      "key": "talent.die",
+      "section": "talent",
+      "title": "кость таланта",
+      "unit": "d",
+      "from": 1,
+      "to": 25,
+      "step": 1,
+      "value": 9,
+      "cost": {
+        "type": "to_value",
+        "rate": 1
+      },
+      "note": "кость dN стоит N XP; выше 25 — только после прорыва на Фундамент"
+    },
+    {
+      "key": "talent.dice_count",
+      "section": "talent",
+      "title": "число костей таланта",
+      "from": 1,
+      "to": 5,
+      "step": 1,
+      "value": 3,
+      "cost": {
+        "type": "table",
+        "table": [
+          0,
+          0,
+          10,
+          20,
+          40,
+          80,
+          160
+        ]
+      },
+      "note": "вторая кость — 10 XP, третья — 20 XP, четвёртая — 40 XP, пятая — 80 XP"
+    },
+    {
+      "key": "talent.flat",
+      "section": "talent",
+      "title": "плоский бонус к таланту",
+      "from": 0,
+      "to": 6,
+      "step": 1,
+      "value": 1,
+      "cost": {
+        "type": "table",
+        "table": [
+          0,
+          5,
+          10,
+          15,
+          20,
+          25,
+          30
+        ]
+      },
+      "note": "после заплатки «плоский бонус к таланту» берётся на каждой кости, кратной четырём"
+    },
+    {
+      "key": "roots.max",
+      "section": "roots",
+      "title": "максимальная чистота корней",
+      "unit": "%",
+      "from": 0,
+      "to": 100,
+      "step": 5,
+      "value": 10,
+      "cost": {
+        "type": "linear",
+        "rate": 5
+      },
+      "note": "+5% за 5 XP, вплоть до 100%"
+    },
+    {
+      "key": "roots.min",
+      "section": "roots",
+      "title": "минимальная чистота корней",
+      "unit": "%",
+      "from": 0,
+      "to": 100,
+      "step": 1,
+      "value": 3,
+      "cost": {
+        "type": "to_value",
+        "rate": 1
+      },
+      "note": "первый процент — 1 XP, каждый следующий на 1 XP дороже"
+    },
+    {
+      "key": "chance.billion",
+      "section": "chances",
+      "title": "шанс «один на миллиард», ступень",
+      "from": 0,
+      "to": 3,
+      "step": 1,
+      "value": 1,
+      "cost": {
+        "type": "table",
+        "table": [
+          0,
+          1,
+          10,
+          200
+        ]
+      },
+      "note": "1 XP, затем 10 XP, затем 200 XP"
+    },
+    {
+      "key": "chance.million",
+      "section": "chances",
+      "title": "шанс «один на миллион», ступень",
+      "from": 0,
+      "to": 2,
+      "step": 1,
+      "value": 0,
+      "cost": {
+        "type": "table",
+        "table": [
+          0,
+          10,
+          50
+        ]
+      },
+      "note": "10 XP, затем 50 XP"
+    },
+    {
+      "key": "chance.million_home",
+      "section": "chances",
+      "title": "шанс «один на миллион у вас дома»",
+      "unit": "%",
+      "from": 0,
+      "to": 10,
+      "step": 1,
+      "value": 0,
+      "cost": {
+        "type": "per_level",
+        "per_level": 50
+      },
+      "note": "первый процент 50 XP, каждый следующий на 50 XP дороже"
+    }
+  ],
+  "notes": "Каркас по посмертию после подвига в секте Звенящих ручьёв. Правила и цены — из текста этой жизни.",
+  "options": {
+    "decimals": true,
+    "numbered": true
+  },
+  "created_at": "0001-01-01T00:00:00Z",
+  "updated_at": "0001-01-01T00:00:00Z"
+}

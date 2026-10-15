@@ -1,0 +1,42 @@
+{% extends "templates/base.jinja" %}
+{% block content %}
+<section class="head-row">
+  <div>
+    <h1>Админка</h1>
+    <p class="muted">Дискорд-хендлы для выдачи доступа и сброса паролей. Всего планов: {{ total_plans }}.</p>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>Ник</th><th>Дискорд</th><th>Планов</th><th>Регистрация</th><th>Последний вход</th><th>Права</th><th></th></tr>
+      </thead>
+      <tbody>
+      {% for u in users %}
+        <tr>
+          <td><b>{{ u.nick }}</b>{% if u.temp %}<br><span class="temp">временный пароль: {{ u.temp }}</span>{% endif %}</td>
+          <td>{{ u.discord }}</td>
+          <td>{{ u.plans }}</td>
+          <td class="muted small">{{ u.created }}</td>
+          <td class="muted small">{{ u.last }}</td>
+          <td>{% if u.is_admin %}<span class="chip ok">админ</span>{% else %}<span class="chip">игрок</span>{% endif %}</td>
+          <td class="row gap">
+            <form method="post" action="/admin/reset" class="inline"
+                  onsubmit="return confirm('Выдать новый временный пароль для {{ u.nick }}?')">
+              <input type="hidden" name="user_id" value="{{ u.id }}">
+              <button class="btn small" type="submit">Сбросить пароль</button>
+            </form>
+            <form method="post" action="/admin/toggle" class="inline">
+              <input type="hidden" name="user_id" value="{{ u.id }}">
+              <button class="btn ghost small" type="submit">{% if u.is_admin %}Снять админа{% else %}Сделать админом{% endif %}</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

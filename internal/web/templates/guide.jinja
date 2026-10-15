@@ -1,0 +1,67 @@
+{% extends "templates/base.jinja" %}
+{% block content %}
+<section class="head-row">
+  <div>
+    <h1>Справка по механике</h1>
+    <p class="muted">Как считается план и что означают шкалы.</p>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Правила плана</h2>
+  <ol class="rules">
+    <li>У плана есть название, смайлик — по желанию.</li>
+    <li>Уроки пишутся кратко, в одну строку и нумеруются, чтобы не ошибиться с количеством.</li>
+    <li>Следи за припиской «можно взять как минимум n-ным уроком».</li>
+    <li>После каждой секции — сумма и остаток опыта. Десятые доли не обязательны.</li>
+    <li>Тренировки и прочие пункты тоже пишутся кратко.</li>
+    <li>Отдельно указываются накопители и фолианты.</li>
+    <li>В конце — «Невыученные»: что откладывается уроками.</li>
+    <li>После них — «Не взято»: какие уроки не берутся.</li>
+    <li>Самый последний пункт — остаток опыта.</li>
+  </ol>
+</section>
+
+<section class="panel">
+  <h2>Уроки</h2>
+  <p>Первый урок стоит <b>5 XP</b>, каждый следующий — на <b>5 XP</b> дороже: 5, 10, 15, 20…</p>
+  <p>Уроки с фиксированной ценой (в тексте — «0 XP», «трофей», «не идёт в счётчик уроков») в нумерацию не входят и цену следующих не поднимают.</p>
+  <p>«Невыученные уроки» бесплатно откладывают один урок на следующую жизнь; каждый урок-слот добавляет ещё один слот.</p>
+</section>
+
+<section class="panel">
+  <h2>Секции плана</h2>
+  <div class="chips">
+    {% for s in sections %}<span class="chip" title="{{ s.hint }}">{{ s.title }}</span>{% endfor %}
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Шкалы по умолчанию</h2>
+  <p class="muted small">Каркас посмертия может переопределять границы и цены — тогда в конструкторе будут его значения.</p>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Шкала</th><th>Секция</th><th>Диапазон</th><th>Шаг</th><th>Полная стоимость</th><th>Как считается</th></tr></thead>
+      <tbody>
+      {% for l in ladders %}
+        <tr>
+          <td><b>{{ l.title }}</b><br><span class="muted small">{{ l.key }}</span></td>
+          <td>{{ l.section }}</td>
+          <td>{{ l.from }}…{{ l.to }}</td>
+          <td>{{ l.step }}</td>
+          <td>{{ l.full }} XP</td>
+          <td class="muted small">{{ l.note }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Каркас посмертия</h2>
+  <p>Магазин под конкретную смерть описывается JSON-ом и загружается в план в конструкторе или через список готовых каркасов.
+     Формат: <code>name</code>, <code>balance</code>, <code>shop[]</code>, <code>ladders[]</code>, <code>accumulators[]</code>, <code>folios[]</code>.</p>
+  <p class="muted small">Позиция магазина: <code>{"title": "будь сильнее", "kind": "lesson", "cost": 5, "fixed": false, "min_lesson": 1, "section": "lessons", "desc": "…"}</code></p>
+</section>
+{% endblock %}

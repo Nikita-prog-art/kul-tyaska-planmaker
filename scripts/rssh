@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Resilient ssh wrapper (RKN drops connections): retries with backoff.
+HOST="${DEPLOY_HOST:-nikita@162.254.85.195}"
+attempts="${RSSH_ATTEMPTS:-6}"
+i=0
+while :; do
+  i=$((i+1))
+  ssh -F /dev/null -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 "$HOST" "$@"
+  rc=$?
+  [ "$rc" -eq 0 ] && exit 0
+  if [ "$i" -ge "$attempts" ]; then
+    echo "rssh: giving up after $i attempts (last rc=$rc)" >&2
+    exit "$rc"
+  fi
+  echo "rssh: attempt $i failed (rc=$rc), retrying in $((i*3))s..." >&2
+  sleep $((i*3))
+done

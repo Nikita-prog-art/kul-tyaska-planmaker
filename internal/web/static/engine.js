@@ -1,0 +1,280 @@
+/* Движок плана: стоимость, суммы по секциям, текст экспорта.
+   Чистые функции без DOM — их же гоняют тесты в node (см. tests/engine.test.js).
+   Логика намеренно повторяет серверную (internal/plan), чтобы предпросмотр
+   в браузере и страница экспорта совпадали до символа. */
+(function (root, factory) {
+  var api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  else root.KT = api;
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  var LESSON_BASE = 5;
+  var LESSON_STEP = 5;
+
+  function lessonCost(n) {
+    if (!n || n <= 0) return 0;
+    return LESSON_BASE + LESSON_STEP * (n - 1);
+  }
+
+  function stepCost(cost, level) {
+    if (!cost) return 0;
+    var v = 0;
+    switch (cost.type) {
+      case 'to_value': v = level * (cost.rate || 1); break;
+      case 'linear': v = cost.rate || 0; break;
+      case 'per_level': v = level * (cost.per_level || 0); break;
+      case 'table': v = (cost.table && cost.table[Math.round(level)]) || 0; break;
+      default: v = 0;
+    }
+    if (cost.ceil && v) v = Math.ceil(v);
+    return v;
+  }
+
+  function ladderCost(ladder) {
+    var total = 0;
+    var step = ladder.step > 0 ? ladder.step : 1;
+    var value = Number(ladder.value) || 0;
+    var from = Number(ladder.from) || 0;
+    for (var v = from + step; v <= value + 1e-9; v += step) total += stepCost(ladder.cost, v);
+    return total;
+  }
+
+  function itemMap(plan) {
+    var m = {};
+    (plan.shop || []).forEach(function (it) { m[it.key] = it; });
+    return m;
+  }
+
+  function hasTag(item, tag) {
+    return !!(item && item.tags && item.tags.indexOf(tag) >= 0);
+  }
+
+  function deferredLimit(plan, items) {
+    var limit = 1;
+    (plan.picks || []).forEach(function (pk) {
+      if (hasTag(items[pk.key], 'defer_slot')) limit++;
+    });
+    return limit;
+  }
+
+  /* computeSummary(plan, sections) → {sections, total, remainder, balance, warnings, ...} */
+  function computeSummary(plan, sections) {
+    var items = itemMap(plan);
+    var bySection = {};
+    var warnings = [];
+    var total = 0;
+    var deferredKeys = {};
+    (plan.deferred || []).forEach(function (d) { deferredKeys[d.key] = true; });
+
+    // Уроки: порядок покупки задаёт нумерацию и стоимость.
+    var paid = 0;
+    (plan.picks || []).forEach(function (pk) {
+      var it = items[pk.key];
+      if (!it || it.kind !== 'lesson' || deferredKeys[pk.key]) return;
+      var line = { key: it.key, title: it.title, fixed: !!it.fixed, cost: 0, number: 0 };
+      if (it.fixed) {
+        line.cost = Number(it.cost) || 0;
+      } else {
+        paid++;
+        line.number = paid;
+        line.cost = lessonCost(paid);
+        if ((it.min_lesson || 1) > paid) {
+          warnings.push('«' + it.title + '» требует минимум ' + it.min_lesson + '-й урок, а стоит ' + paid + '-м');
+        }
+      }
+      total += line.cost;
+      (bySection.lessons = bySection.lessons || []).push(line);
+    });
+
+    // Отложенные уроки: бесплатно, без номера.
+    var limit = deferredLimit(plan, items);
+    (plan.deferred || []).forEach(function (d) {
+      var it = items[d.key];
+      if (!it) return;
+      if (it.no_defer) warnings.push('«' + it.title + '» нельзя отложить невыученными уроками');
+      (bySection.lessons = bySection.lessons || []).push({
+        key: it.key, title: it.title, deferred: true, cost: 0, number: 0,
+        note: 'невыученный, в следующую жизнь'
+      });
+    });
+    var used = (plan.deferred || []).filter(function (d) { return !!items[d.key]; }).length;
+    if (used > limit) warnings.push('отложено уроков больше, чем слотов: ' + used + ' из ' + limit);
+
+    // Прочие покупки.
+    (plan.picks || []).forEach(function (pk) {
+      var it = items[pk.key];
+      if (!it || it.kind === 'lesson') return;
+      var qty = pk.qty > 0 ? pk.qty : 1;
+      var cost = (Number(it.cost) || 0) * qty;
+      total += cost;
+      var sec = it.section || 'other';
+      (bySection[sec] = bySection[sec] || []).push({
+        key: it.key, title: it.title, cost: cost, qty: qty, note: it.price || ''
+      });
+    });
+
+    // Шкалы.
+    (plan.ladders || []).forEach(function (l) {
+      if (l.hidden || !(Number(l.value) > Number(l.from))) return;
+      var cost = ladderCost(l);
+      if (!cost) return;
+      total += cost;
+      var sec = l.section || 'other';
+      (bySection[sec] = bySection[sec] || []).push({
+        key: l.key, title: ladderTitle(l), cost: cost, ladder: true, note: l.note || ''
+      });
+    });
+
+    var order = (sections || []).slice().sort(function (a, b) { return (a.order || 99) - (b.order || 99); });
+    var out = [];
+    var run = Number(plan.balance) || 0;
+    order.forEach(function (sec) {
+      var lines = bySection[sec.key];
+      if (!lines || !lines.length) return;
+      var sum = lines.reduce(function (a, l) { return a + l.cost; }, 0);
+      run -= sum;
+      out.push({
+        key: sec.key, title: sec.title, hint: sec.hint || '',
+        order: sec.order || 99, lines: lines, sum: sum, remainder: run
+      });
+    });
+    if (run < -1e-9) warnings.push('перерасход: ' + fmt(Math.abs(run), true) + ' XP больше, чем есть');
+
+    var taken = {};
+    (plan.picks || []).forEach(function (pk) { taken[pk.key] = true; });
+    (plan.deferred || []).forEach(function (d) { taken[d.key] = true; });
+    var notTaken = (plan.not_taken || []).map(function (k) {
+      var it = items[k];
+      return it ? { key: it.key, title: it.title } : null;
+    }).filter(Boolean);
+
+    return {
+      sections: out, total: total, remainder: run, balance: Number(plan.balance) || 0,
+      warnings: warnings, deferredLimit: limit, deferredUsed: used,
+      notTaken: notTaken, paidLessons: paid
+    };
+  }
+
+  function ladderTitle(l) {
+    var val = number(l.value);
+    if (l.unit === 'd') return l.title + ': d' + val;
+    return l.title + ': ' + val + (l.unit || '');
+  }
+
+  function number(v) {
+    v = Number(v) || 0;
+    if (v === Math.round(v)) return String(Math.round(v));
+    return String(v).replace('.', ',');
+  }
+
+  /* fmt(v, decimals) — как в Go: 5 знаков, хвостовые нули убираются, запятая. */
+  function fmt(v, decimals) {
+    v = Number(v) || 0;
+    if (!decimals) {
+      var r = Math.round(Math.abs(v));
+      return (v < 0 ? '-' : '') + r;
+    }
+    var s = Math.abs(v).toFixed(5);
+    if (s.indexOf('.') >= 0) s = s.replace(/0+$/, '').replace(/\.$/, '');
+    return (v < 0 ? '-' : '') + s.replace('.', ',');
+  }
+
+  /* renderExport(plan, summary, sections) — текст плана в принятом формате. */
+  function renderExport(plan, summary, sections) {
+    var dec = !!(plan.options && plan.options.decimals);
+    var out = [];
+    out.push('[*] ' + String(plan.title || '').trim() + (plan.emoji ? ' ' + String(plan.emoji).trim() : ''));
+    out.push('');
+
+    (summary.sections || []).forEach(function (sec) {
+      out.push(sec.title + ':');
+      sec.lines.forEach(function (l) {
+        if (l.deferred) {
+          out.push('  - ' + l.title + ' (невыученный, в следующую жизнь)');
+        } else if (l.number > 0) {
+          out.push('  ' + l.number + '. ' + l.title + ': ' + fmt(l.cost, dec));
+        } else {
+          out.push('  - ' + l.title + ': ' + fmt(l.cost, dec));
+        }
+      });
+      out.push('  Сумма: ' + fmt(sec.sum, dec) + ', ост. ' + fmt(sec.remainder, dec));
+      out.push('');
+    });
+
+    var act = [], skip = [];
+    (plan.accumulators || []).forEach(function (a) {
+      var line = a.name + ' (' + number(a.charges) + '/' + number(a.max) + ', +' + number(a.rate) + '% за жизнь)';
+      (a.activate ? act : skip).push(line);
+    });
+    if (act.length || skip.length) {
+      out.push('Накопители:');
+      if (act.length) out.push('  - активирую: ' + act.join('; '));
+      if (skip.length) out.push('  - не активирую: ' + skip.join('; '));
+      out.push('');
+    }
+
+    var take = [], keep = [];
+    (plan.folios || []).forEach(function (f) {
+      var line = f.name + (f.note ? ' (' + f.note + ')' : '');
+      (f.take ? take : keep).push(line);
+    });
+    if (take.length || keep.length) {
+      out.push('Фолианты:');
+      if (take.length) out.push('  - беру с собой: ' + take.join('; '));
+      if (keep.length) out.push('  - оставляю в библиотеке: ' + keep.join('; '));
+      out.push('');
+    }
+
+    var items = itemMap(plan);
+    var deferredNames = (plan.deferred || []).map(function (d) {
+      return items[d.key] ? items[d.key].title : null;
+    }).filter(Boolean);
+    out.push('Невыученные: ' + (deferredNames.length ? deferredNames.join(', ') : '—'));
+    out.push('');
+
+    if (summary.notTaken.length) {
+      out.push('Не взято: ' + summary.notTaken.map(function (l) { return l.title; }).join(', '));
+      out.push('');
+    }
+
+    if (summary.warnings.length) {
+      out.push('Проверки:');
+      summary.warnings.forEach(function (w) { out.push('  ! ' + w); });
+      out.push('');
+    }
+
+    out.push('Итого потрачено: ' + fmt(summary.total, dec));
+    out.push('Остаток: ' + fmt(summary.remainder, dec) + ' XP');
+    if (plan.notes) { out.push(''); out.push(String(plan.notes).trim()); }
+    return out.join('\n') + '\n';
+  }
+
+  /* availableLadders(plan) — шкалы, доступные в этом каркасе. */
+  function visibleLadders(plan) {
+    return (plan.ladders || []).filter(function (l) { return !l.hidden; });
+  }
+
+  /* nextStepCost(plan, ladderKey) — цена следующего шага (null, если дальше нельзя). */
+  function nextLadderStep(ladder) {
+    var step = ladder.step > 0 ? ladder.step : 1;
+    var next = Number(ladder.value) + step;
+    if (next > Number(ladder.to) + 1e-9) return null;
+    return { value: next, cost: stepCost(ladder.cost, next) };
+  }
+
+  return {
+    LESSON_BASE: LESSON_BASE,
+    LESSON_STEP: LESSON_STEP,
+    lessonCost: lessonCost,
+    stepCost: stepCost,
+    ladderCost: ladderCost,
+    computeSummary: computeSummary,
+    renderExport: renderExport,
+    nextLadderStep: nextLadderStep,
+    visibleLadders: visibleLadders,
+    itemMap: itemMap,
+    fmt: fmt,
+    number: number
+  };
+});

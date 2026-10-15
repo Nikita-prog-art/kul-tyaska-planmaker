@@ -1,0 +1,99 @@
+{% extends "templates/base.jinja" %}
+{% block content %}
+<section class="head-row">
+  <div>
+    <h1>Мои планы</h1>
+    <p class="muted">Каждый план — одно перерождение: баланс, магазин и выбранные покупки.</p>
+  </div>
+  <button class="btn big" form="create-form" type="submit">＋ Новый план</button>
+</section>
+
+<section class="panel">
+  <h2>Создать план</h2>
+  <form id="create-form" class="form grid" method="post" action="/plans">
+    <label>Название
+      <input name="title" placeholder="например, «Праведность без контроля пола»" maxlength="80">
+    </label>
+    <label>Смайлик
+      <input name="emoji" placeholder="🩸" maxlength="8">
+    </label>
+    <label>Баланс XP
+      <input name="balance" inputmode="decimal" placeholder="1605,24148">
+    </label>
+    <label>Готовый каркас посмертия
+      <select name="preset">
+        <option value="">— пустой план —</option>
+        {% for p in presets %}
+        <option value="{{ p.file }}">{{ p.name }} · {{ p.balance }} XP · уроков: {{ p.lessons }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <div class="form-foot">
+      <button class="btn" type="submit">Создать</button>
+      <span class="muted small">Пустой план — под свой каркас: магазин загружается JSON-ом прямо в конструкторе.</span>
+    </div>
+  </form>
+</section>
+
+{% if presets %}
+<section class="panel">
+  <h2>Каркасы посмертий</h2>
+  <p class="muted small">Готовые скелеты магазина: можно создать план в один клик или скачать JSON и поправить под себя.</p>
+  <div class="cards two">
+    {% for p in presets %}
+    <article class="card">
+      <h3>{{ p.name }}</h3>
+      <p class="muted small">
+        Баланс: <b>{{ p.balance }}</b> XP{% if p.earned %} · итог посмертия: {{ p.earned }} XP{% endif %}<br>
+        Уроков: {{ p.lessons }} · прочих позиций: {{ p.items }}
+      </p>
+      {% if p.note %}<p class="small">{{ p.note }}</p>{% endif %}
+      <div class="row gap">
+        <form method="post" action="/plans" class="inline">
+          <input type="hidden" name="preset" value="{{ p.file }}">
+          <button class="btn small" type="submit">Создать план</button>
+        </form>
+        <a class="btn ghost small" href="/presets/{{ p.file }}">Скачать JSON</a>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<section class="panel">
+  <h2>Список планов</h2>
+  {% if plans %}
+  <div class="plan-list">
+    {% for p in plans %}
+    <article class="plan-item{% if p.warning %} warn{% endif %}">
+      <div class="plan-main">
+        <a class="plan-title" href="/plans/{{ p.id }}">{{ p.emoji }} {{ p.title }}</a>
+        <div class="muted small">
+          {% if p.skeleton %}каркас: {{ p.skeleton }} · {% endif %}
+          уроков: {{ p.lessons }} · отложено: {{ p.deferred }} · обновлён: {{ p.updated }}
+        </div>
+      </div>
+      <div class="plan-nums">
+        <span title="остаток">ост. <b>{{ p.remainder }}</b></span>
+        <span title="потрачено">−{{ p.spent }}</span>
+        <span class="muted" title="баланс">из {{ p.balance }}</span>
+      </div>
+      <div class="plan-actions">
+        <a class="btn small" href="/plans/{{ p.id }}">Открыть</a>
+        <a class="btn ghost small" href="/plans/{{ p.id }}/export">Экспорт</a>
+        <form method="post" action="/plans/{{ p.id }}/duplicate" class="inline">
+          <button class="btn ghost small" type="submit">Копия</button>
+        </form>
+        <form method="post" action="/plans/{{ p.id }}/delete" class="inline" onsubmit="return confirm('Удалить план «{{ p.title }}»?')">
+          <button class="btn danger small" type="submit">Удалить</button>
+        </form>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">Пока ни одного плана. Создай первый — сверху.</p>
+  {% endif %}
+</section>
+{% endblock %}
