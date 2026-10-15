@@ -136,10 +136,10 @@ func TestFullFlow(t *testing.T) {
 			{"key": "lesson:a", "kind": "lesson", "section": "lessons", "title": "отмена детской смертности", "fixed": true, "cost": 1},
 			{"key": "lesson:b", "kind": "lesson", "section": "lessons", "title": "демонические культиваторы — зло", "min_lesson": 1, "cost": 0},
 		},
-		"picks":    []map[string]any{{"key": "lesson:a"}, {"key": "lesson:b"}},
-		"deferred": []map[string]any{},
+		"picks":     []map[string]any{{"key": "lesson:a"}, {"key": "lesson:b"}},
+		"deferred":  []map[string]any{},
 		"not_taken": []string{"lesson:b"},
-		"ladders": []map[string]any{{"key": "talent.die", "section": "talent", "title": "кость таланта", "from": 1, "to": 5, "step": 1, "value": 2, "cost": map[string]any{"type": "to_value", "rate": 1}}},
+		"ladders":   []map[string]any{{"key": "talent.die", "section": "talent", "title": "кость таланта", "from": 1, "to": 5, "step": 1, "value": 2, "cost": map[string]any{"type": "to_value", "rate": 1}}},
 	}
 	raw, _ := json.Marshal(state)
 	resp = c.post(planURL, url.Values{"state": {string(raw)}})

@@ -25,15 +25,27 @@
     <h2>Текст плана</h2>
     <button class="btn ghost small" id="copy-export" type="button">Скопировать</button>
   </div>
+  {% if summary.warnings %}
+  <div class="export-warn">
+    <b>⚠ Проверки не выполняются: {{ summary.warnings|length }}</b>
+    <ul class="warn-list">
+      {% for w in summary.warnings %}<li>{{ w }}</li>{% endfor %}
+    </ul>
+    <p class="muted small">Этот же список стоит первым в тексте плана — Ли Лун увидит его вместе с планом.</p>
+  </div>
+  {% endif %}
   <textarea class="export-text" id="export-text" rows="28" readonly>{{ export_text }}</textarea>
 </section>
 
-{% if summary.warnings %}
+{% if summary.future %}
 <section class="panel">
-  <h2>Проверки</h2>
-  <ul class="warn-list">
-    {% for w in summary.warnings %}<li>{{ w }}</li>{% endfor %}
+  <h2>На будущие жизни</h2>
+  <ul class="future-list">
+    {% for f in summary.future %}
+    <li class="{{ 'met' if f.met else 'unmet' }}">{{ '✓' if f.met else '·' }} {{ f.text }}</li>
+    {% endfor %}
   </ul>
+  <p class="muted small">Это памятка, а не проверка плана: Джон Сноу перерождается не раньше следующей жизни.</p>
 </section>
 {% endif %}
 {% endblock %}

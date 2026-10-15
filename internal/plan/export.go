@@ -16,6 +16,11 @@ func Render(p *Plan, s *Summary) string {
 	}
 	b.WriteString("\n\n")
 
+	// Проваленные проверки видно сразу: план читает Ли Лун, а не только игрок.
+	if len(s.Warnings) > 0 {
+		fmt.Fprintf(&b, "⚠ Проверки не выполняются: %d\n\n", len(s.Warnings))
+	}
+
 	for _, sec := range s.Sections {
 		fmt.Fprintf(&b, "%s:\n", sec.Title)
 		for _, l := range sec.Lines {
@@ -97,6 +102,19 @@ func Render(p *Plan, s *Summary) string {
 		b.WriteString("Проверки:\n")
 		for _, w := range s.Warnings {
 			fmt.Fprintf(&b, "  ! %s\n", w)
+		}
+		b.WriteString("\n")
+	}
+
+	// Условия, которые касаются будущих жизней: памятка, а не проверка плана.
+	if len(s.Future) > 0 {
+		b.WriteString("На будущие жизни:\n")
+		for _, f := range s.Future {
+			mark := "— пока не выполнено"
+			if f.Met {
+				mark = "— выполнено"
+			}
+			fmt.Fprintf(&b, "  - %s %s\n", strings.TrimSpace(f.Text), mark)
 		}
 		b.WriteString("\n")
 	}

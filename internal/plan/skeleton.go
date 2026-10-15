@@ -103,6 +103,18 @@ func (s *Skeleton) Normalize() error {
 			it.LockNote = "обязательная позиция каркаса"
 		}
 	}
+	// Награды за порядок: ссылаться можно только на существующую позицию.
+	for i := range s.Shop {
+		it := &s.Shop[i]
+		if it.RewardAfter == nil {
+			continue
+		}
+		if !seen[it.RewardAfter.Key] {
+			it.RewardAfter = nil
+			continue
+		}
+		it.RewardAfter.Title = strings.TrimSpace(it.RewardAfter.Title)
+	}
 	// Условия каркаса: ключи должны существовать в магазине.
 	var reqs []Requirement
 	for _, req := range s.Requirements {

@@ -353,13 +353,32 @@
         h('div', { class: 'bar' }, [h('i', { id: 'sum-bar' })]),
         h('div', { class: 'muted small', id: 'sum-slots', text: '' })
       ]),
+      h('div', { class: 'card', id: 'kt-rewards', hidden: true }),
       h('div', { class: 'card', id: 'kt-req' }),
       h('div', { class: 'card', id: 'kt-warnings' }),
       h('nav', { class: 'card sec-nav', id: 'kt-nav' })
     ]);
   }
 
-  /* renderRequirements показывает условия каркаса и их выполнение. */
+  /* renderRewards показывает награды за порядок, которые план уже получает. */
+  function renderRewards(summary) {
+    var box = document.getElementById('kt-rewards');
+    if (!box) return;
+    box.textContent = '';
+    var list = summary.rewards || [];
+    if (!list.length) {
+      box.hidden = true;
+      return;
+    }
+    box.hidden = false;
+    box.appendChild(h('h3', { text: 'Награды за порядок' }));
+    box.appendChild(h('ul', { class: 'reward-list' }, list.map(function (r) {
+      return h('li', { text: r });
+    })));
+  }
+
+  /* renderRequirements показывает условия каркаса и их выполнение.
+     Условия «на будущие жизни» — памятка: они не попадают в проверки. */
   function renderRequirements() {
     var box = document.getElementById('kt-req');
     if (!box) return;
@@ -370,23 +389,32 @@
       return;
     }
     box.hidden = false;
-    box.appendChild(h('h3', { text: 'Условия каркаса' }));
-    reqs.forEach(function (req) {
-      var keys = req.keys || [];
-      var met = req.kind === 'all_of'
-        ? keys.every(function (k) { return isPicked(k); })
-        : keys.some(function (k) { return isPicked(k); });
-      var names = keys.map(function (k) {
-        var it = item(k);
-        return it ? it.title : k;
+    var groups = [
+      { title: 'Условия каркаса', soft: false },
+      { title: 'На будущие жизни (не проверка)', soft: true }
+    ];
+    groups.forEach(function (group) {
+      var list = reqs.filter(function (req) { return !!req.soft === group.soft; });
+      if (!list.length) return;
+      box.appendChild(h('h3', { class: group.soft ? 'muted' : '', text: group.title }));
+      list.forEach(function (req) {
+        var keys = req.keys || [];
+        var met = req.kind === 'all_of'
+          ? keys.every(function (k) { return isPicked(k); })
+          : keys.some(function (k) { return isPicked(k); });
+        var names = keys.map(function (k) {
+          var it = item(k);
+          return it ? it.title : k;
+        });
+        var mark = met ? '✓' : (group.soft ? '·' : '✗');
+        box.appendChild(h('div', { class: 'req ' + (group.soft ? 'soft ' : '') + (met ? 'met' : 'unmet') }, [
+          h('span', { class: 'req-mark', text: mark }),
+          h('span', { class: 'req-text' }, [
+            h('span', { text: (req.message || '') + ' ' }),
+            h('span', { class: 'muted small', text: '(' + (req.kind === 'all_of' ? 'нужны: ' : 'нужно одно из: ') + names.join(', ') + ')' })
+          ])
+        ]));
       });
-      box.appendChild(h('div', { class: 'req ' + (met ? 'met' : 'unmet') }, [
-        h('span', { class: 'req-mark', text: met ? '✓' : '✗' }),
-        h('span', { class: 'req-text' }, [
-          h('span', { text: (req.message || '') + ' ' }),
-          h('span', { class: 'muted small', text: '(' + (req.kind === 'all_of' ? 'нужны: ' : 'нужно одно из: ') + names.join(', ') + ')' })
-        ])
-      ]));
     });
   }
 
@@ -445,13 +473,31 @@
             render();
           }, text: 'Разложить уроки по требованиям'
         }),
-        h('span', { class: 'muted small', text: 'сортирует выбранные уроки так, чтобы «минимум n-ным» выполнялось' })
+        h('span', {
+          class: 'muted small' + (hasMinViolation() ? ' warn-live' : ''),
+          text: hasMinViolation()
+            ? 'есть уроки раньше своего «минимум n-ным» — нажми, чтобы разложить'
+            : 'сортирует выбранные уроки так, чтобы «минимум n-ным» выполнялось'
+        })
       ]) : null
     ]);
   }
 
   function renderLadder(l) {
     var next = KT.nextLadderStep(l);
+    var owned = h('input', {
+      class: 'num ladder-owned', type: 'number', value: KT.number(l.from),
+      min: 0, max: l.to, step: l.step,
+      title: 'сколько уже есть у Ли Лун — за это опыт не списывается',
+      onchange: function (e) {
+        var v = parseNum(e.target.value);
+        v = Math.max(0, Math.min(l.to, Math.round(v / l.step) * l.step));
+        l.from = v;
+        if (Number(l.value) < v) l.value = v;
+        markDirty();
+        render();
+      }
+    });
     var input = h('input', {
       class: 'num ladder-value', type: 'number', value: l.value,
       min: l.from, max: l.to, step: l.step,
@@ -467,7 +513,13 @@
     return h('div', { class: 'row ladder', dataset: { ladder: l.key } }, [
       h('div', { class: 'ladder-main' }, [
         h('div', { class: 'item-title', text: l.title }),
-        h('div', { class: 'muted small', text: 'от ' + KT.number(l.from) + ' до ' + KT.number(l.to) + ', шаг ' + KT.number(l.step) + (l.note ? ' · ' + l.note : '') })
+        h('div', { class: 'muted small ladder-hint' }, [
+          document.createTextNode('уже есть: '),
+          owned,
+          document.createTextNode(fmtLadderValue(l, Number(l.from)) + ' · покупаю до ' +
+            fmtLadderValue(l, Number(l.to)) + ', шаг ' + KT.number(l.step) +
+            (l.note ? ' · ' + l.note : ''))
+        ])
       ]),
       h('div', { class: 'ladder-ctl' }, [
         h('button', {
@@ -481,8 +533,18 @@
           onclick: function () { stepLadder(l, 1); }
         }, [document.createTextNode(next ? '+ (' + fmt(next.cost) + ')' : '+')])
       ]),
-      h('div', { class: 'item-cost', dataset: { cost: l.key }, text: fmt(KT.ladderCost(l)) })
+      h('div', {
+        class: 'item-cost', dataset: { cost: l.key },
+        title: 'опыт за прирост от ' + fmtLadderValue(l, Number(l.from)) + ' до ' + fmtLadderValue(l, Number(l.value)),
+        text: fmt(KT.ladderCost(l))
+      })
     ]);
+  }
+
+  /* fmtLadderValue печатает значение шкалы так же, как её название. */
+  function fmtLadderValue(l, v) {
+    if (l.unit === 'd') return 'd' + KT.number(v);
+    return KT.number(v) + (l.unit || '');
   }
 
   function stepLadder(l, dir) {
@@ -504,6 +566,8 @@
         text: it.already_paid ? '🔒 уже взято' : '🔒 обязательно'
       }));
     }
+    var reward = rewardHint(it);
+    if (reward) tags.push(reward.tag);
     if (it.min_lesson > 1) tags.push(h('span', { class: 'tag warn', text: 'минимум ' + it.min_lesson + '-м уроком' }));
     if ((it.tags || []).indexOf('one_chance') >= 0) tags.push(h('span', { class: 'tag warn', text: 'только один раз в жизни' }));
     if ((it.tags || []).indexOf('trophy') >= 0) tags.push(h('span', { class: 'tag', text: 'трофей' }));
@@ -517,6 +581,8 @@
       ? h('div', { class: 'muted small' }, [document.createTextNode(it.lock_note || 'позиция обязательна по тексту')])
       : null;
 
+    var rewardLine = reward ? reward.line : null;
+
     var row = h('div', {
       class: 'row item' + (it.locked ? ' locked-item' : ''),
       dataset: { key: it.key, kind: it.kind, section: sectionKey },
@@ -526,6 +592,7 @@
       h('div', { class: 'item-main' }, [
         h('div', { class: 'item-title' }, [it.title].concat(tags)),
         lockedHint,
+        rewardLine,
         it.desc ? h('details', { class: 'item-desc' }, [
           h('summary', { text: 'описание' }),
           h('p', { text: it.desc })
@@ -552,7 +619,7 @@
           onclick: function () { setState(it.key, 'skip'); }
         })
       ]),
-      it.kind === 'lesson' && !it.locked ? h('div', { class: 'item-order' }, [
+      it.kind === 'lesson' && !it.already_paid ? h('div', { class: 'item-order' }, [
         h('button', { class: 'btn tiny', type: 'button', text: '↑', title: 'выше в очереди уроков', onclick: function () { movePick(it.key, -1); } }),
         h('button', { class: 'btn tiny', type: 'button', text: '↓', title: 'ниже в очереди уроков', onclick: function () { movePick(it.key, 1); } })
       ]) : null
@@ -579,17 +646,90 @@
   }
 
   function movePick(key, dir) {
-    if (isLocked(plan, key)) return;
+    // Уже взятые ею уроки стоят первыми: их место задано текстом.
+    if (isPinned(key)) return;
     var idx = pickIndex(key);
     if (idx < 0) return;
     var to = idx + dir;
     if (to < 0 || to >= plan.picks.length) return;
-    if (isLocked(plan, plan.picks[to].key)) return; // не проталкиваемся сквозь обязательные
+    if (isPinned(plan.picks[to].key)) return; // не проталкиваемся сквозь уже взятые
     var tmp = plan.picks[idx];
     plan.picks[idx] = plan.picks[to];
     plan.picks[to] = tmp;
     markDirty();
     render();
+  }
+
+  /* isPinned — позиция, место которой задано текстом (уже взята ею самой). */
+  function isPinned(key) {
+    var it = item(key);
+    return !!(it && it.already_paid);
+  }
+
+  /* pickIndex — место позиции в очереди покупок, -1 если её нет. */
+  function pickIndex(key) {
+    for (var i = 0; i < plan.picks.length; i++) {
+      if (plan.picks[i].key === key) return i;
+    }
+    return -1;
+  }
+
+  /* moveAfter ставит позицию сразу после указанной. */
+  function moveAfter(key, refKey) {
+    if (!placeAfter(key, refKey)) return;
+    markDirty();
+    render();
+  }
+
+  /* placeAfter переставляет позицию в очереди, ничего не перерисовывая. */
+  function placeAfter(key, refKey) {
+    var i = pickIndex(key), ref = pickIndex(refKey);
+    if (i < 0 || ref < 0 || i === ref + 1) return false;
+    var pk = plan.picks.splice(i, 1)[0];
+    plan.picks.splice(pickIndex(refKey) + 1, 0, pk);
+    return true;
+  }
+
+  /* rewardHint — пометка о награде за порядок: тег и строка под названием. */
+  function rewardHint(it) {
+    var r = it.reward_after;
+    if (!r || !r.key) return null;
+    var ref = item(r.key);
+    var refTitle = ref ? ref.title : r.key;
+    var title = r.title || 'квестовая награда';
+    var st = rewardState(it);
+    var tag = h('span', {
+      class: 'tag ' + (st === 'lost' ? 'warn' : (st === 'got' ? 'ok' : '')),
+      title: 'награда за порядок: возьми после «' + refTitle + '»',
+      text: st === 'got' ? '✓ ' + title : (st === 'lost' ? '✗ ' + title : 'после «' + refTitle + '»')
+    });
+    var text;
+    if (st === 'got') {
+      text = title + ': ' + (r.note || '') + ' — урок стоит после «' + refTitle + '»';
+    } else if (st === 'lost') {
+      text = 'Взято раньше «' + refTitle + '» — ' + title.toLowerCase() + ' не достанется' +
+        (r.lose ? ': ' + r.lose : '');
+    } else {
+      text = 'Даст ' + title.toLowerCase() + ', если взять после «' + refTitle + '»' + (r.note ? ': ' + r.note : '');
+    }
+    var line = h('div', { class: 'small reward-hint ' + st }, [document.createTextNode(text)]);
+    if (st === 'lost') {
+      line.appendChild(h('button', {
+        class: 'btn tiny', type: 'button', text: 'поставить после «' + refTitle + '»',
+        onclick: function () { moveAfter(it.key, r.key); }
+      }));
+    }
+    return { tag: tag, line: line };
+  }
+
+  /* rewardState — получена ли награда за порядок: got | lost | idle. */
+  function rewardState(it) {
+    var r = it.reward_after;
+    if (!r || !r.key || !isPicked(it.key)) return 'idle';
+    if ((plan.deferred || []).some(function (d) { return d.key === it.key; })) return 'idle';
+    var ref = pickIndex(r.key);
+    if (ref < 0) return 'idle';
+    return pickIndex(it.key) > ref ? 'got' : 'lost';
   }
 
   /* sortPicks — раскладка уроков: сначала уже оплаченные (их место задано
@@ -608,6 +748,13 @@
         return (order[a.key] || 0) - (order[b.key] || 0);
       }
       return 0;
+    });
+    // Награда за порядок важнее «минимума»: если урок должен идти после другого,
+    // ставим его сразу за ним, иначе награда потеряется.
+    plan.shop.forEach(function (it) {
+      if (!it.reward_after || !it.reward_after.key) return;
+      if (pickIndex(it.key) < 0 || pickIndex(it.reward_after.key) < 0) return;
+      if (pickIndex(it.key) < pickIndex(it.reward_after.key)) placeAfter(it.key, it.reward_after.key);
     });
   }
 
@@ -708,7 +855,24 @@
       }
     }
 
+    renderRewards(summary);
     renderRequirements();
+
+    // В панели экспорта сразу видно, что план не пройдёт проверки.
+    var exportWarn = document.getElementById('kt-export-warn');
+    if (exportWarn) {
+      exportWarn.textContent = '';
+      if (summary.warnings.length) {
+        exportWarn.hidden = false;
+        exportWarn.appendChild(h('b', { text: '⚠ Проверки не выполняются: ' + summary.warnings.length }));
+        exportWarn.appendChild(h('ul', { class: 'warn-list' }, summary.warnings.map(function (w) {
+          return h('li', { text: w });
+        })));
+        exportWarn.appendChild(h('p', { class: 'muted small', text: 'Этот же список уедет в выгрузку: Ли Лун увидит его вместе с планом.' }));
+      } else {
+        exportWarn.hidden = true;
+      }
+    }
 
     var nav = document.getElementById('kt-nav');
     if (nav) {
@@ -835,12 +999,14 @@
 
   function renderExportModal() {
     var area = h('textarea', { id: 'kt-export-text', class: 'mono export-text', rows: 24, readonly: true });
+    var warn = h('div', { class: 'export-warn', id: 'kt-export-warn', hidden: true });
     return h('div', { class: 'panel-modal', id: 'kt-export', hidden: true }, [
       h('div', { class: 'panel-inner' }, [
         h('header', { class: 'panel-head' }, [
           h('h2', { text: 'Экспорт плана' }),
           h('button', { class: 'btn ghost small', type: 'button', text: 'Закрыть', onclick: function () { closePanel('kt-export'); } })
         ]),
+        warn,
         h('div', { class: 'row gap wrap' }, [
           h('button', {
             class: 'btn', type: 'button', text: 'Скопировать', onclick: function (e) {
@@ -882,8 +1048,7 @@
   }
 
   function save() {
-    // Порядок уроков меняем только если он нарушает «минимум n-ным уроком».
-    if (hasMinViolation()) sortPicks();
+    // Порядок уроков не трогаем: как игрок расставил, так и сохраняем.
     var state = {
       title: plan.title, emoji: plan.emoji, balance: plan.balance, notes: plan.notes || '',
       decimals: !!(plan.options && plan.options.decimals), skeleton: plan.skeleton || '',
@@ -935,9 +1100,7 @@
   var search = document.getElementById('kt-search');
   if (search) search.addEventListener('input', function (e) { applyFilter(e.target.value); });
 
-  // Раскладываем уроки по требованиям сразу после загрузки каркаса,
-  // чтобы план не начинался с нарушения «минимум n-ным уроком».
-  if (hasMinViolation()) sortPicks();
-
+  // Порядок уроков builder больше не меняет сам: он двигает его только
+  // по кнопке «Разложить уроки по требованиям» или «поставить после …».
   render();
 })();

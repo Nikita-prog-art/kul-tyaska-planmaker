@@ -298,6 +298,101 @@ test('план с null вместо пустых списков не ломае�
   assert.ok(d.getElementById('sum-spent').textContent.length > 0, 'суммы пересчитались');
 });
 
+// --- награды за порядок, «уже есть» у шкал и предупреждение при экспорте ---
+
+test('награда за порядок: видна потеря и чинится кнопкой', () => {
+  const p = JSON.parse(JSON.stringify(plan));
+  p.picks = [
+    { key: 'lesson:poceluy_melisandry' },
+    { key: 'lesson:posledniy_boy' },
+    { key: 'lesson:ping_sistem' }
+  ];
+  p.deferred = [];
+  p.not_taken = [];
+  const d = bootPage(p).document;
+
+  const row = rowByTitleIn(d, 'последний бой');
+  assert.ok(row, 'строка «последний бой» есть');
+  assert.ok(row.querySelector('.reward-hint.lost'), 'видно, что награда теряется');
+  assert.ok(row.textContent.indexOf('квестовая награда') >= 0, 'награда названа');
+  assert.ok(row.textContent.indexOf('+4%') >= 0, 'описано, что даёт награда');
+
+  const fix = Array.prototype.find.call(row.querySelectorAll('button'), (b) => /поставить после/.test(b.textContent));
+  assert.ok(fix, 'есть кнопка «поставить после»');
+  fix.click();
+
+  const after = rowByTitleIn(d, 'последний бой');
+  assert.ok(after.querySelector('.reward-hint.got'), 'после перестановки награда получена');
+  const rewards = d.getElementById('kt-rewards');
+  assert.ok(rewards && !rewards.hidden, 'награда попала в список наград');
+  assert.ok(d.getElementById('kt-export-text').value.indexOf('квестовая награда') >= 0, 'награда есть в выгрузке');
+});
+
+test('обязательный урок двигается вручную, уже взятый — нет', () => {
+  const p = JSON.parse(JSON.stringify(plan));
+  p.picks = [
+    { key: 'lesson:poceluy_melisandry' },
+    { key: 'lesson:posledniy_boy' },
+    { key: 'lesson:ping_sistem' }
+  ];
+  p.deferred = [];
+  p.not_taken = [];
+  const d = bootPage(p).document;
+
+  assert.strictEqual(rowByTitleIn(d, 'поцелуй Мелисандры').querySelector('.item-order'), null,
+    'уже взятый ею урок не двигается: его место задано текстом');
+  const ping = rowByTitleIn(d, 'пинг систем');
+  assert.ok(ping.querySelector('.item-order'), 'обязательный урок можно двигать вручную');
+  const before = ping.querySelector('.badge').textContent;
+  ping.querySelectorAll('.item-order .btn')[0].click(); // «выше»
+  const after = rowByTitleIn(d, 'пинг систем').querySelector('.badge').textContent;
+  assert.notStrictEqual(after, before, 'номер урока изменился после перестановки');
+});
+
+test('шкала показывает, что уже есть, и считает только прирост', () => {
+  const d = bootPage(JSON.parse(JSON.stringify(plan))).document;
+  const row = d.querySelector('.row.ladder[data-ladder="talent.die"]');
+  const owned = row.querySelector('.ladder-owned');
+  assert.ok(owned, 'есть поле «уже есть»');
+  assert.strictEqual(Number(owned.value), 22, 'по каркасу кость уже d22');
+  assert.ok(row.textContent.indexOf('уже есть') >= 0, 'подпись на месте');
+
+  // В цену входит только прирост от того, что уже есть: d23 + d24 = 47 XP,
+  // а не все ступени с d1 (это было бы 324 XP).
+  const value = Number(row.querySelector('.ladder-value').value);
+  const cost = Number(row.querySelector('[data-cost="talent.die"]').textContent);
+  assert.strictEqual(cost, KT.ladderCost({ from: 22, step: 1, value: value, cost: { type: 'to_value', rate: 1 } }),
+    'цена — это прирост от «уже есть»');
+  assert.ok(cost < 100, 'ступени с d1 в цену не попали');
+
+  row.querySelectorAll('.ladder-ctl .btn')[1].click(); // «+» — покупаем следующую ступень
+  const after = d.querySelector('.row.ladder[data-ladder="talent.die"]');
+  const nextValue = Number(after.querySelector('.ladder-value').value);
+  assert.strictEqual(nextValue, value + 1, 'значение выросло на шаг');
+  assert.strictEqual(Number(after.querySelector('[data-cost="talent.die"]').textContent),
+    KT.ladderCost({ from: 22, step: 1, value: nextValue, cost: { type: 'to_value', rate: 1 } }),
+    'шаг стоит свой номер граней');
+});
+
+test('проваленные проверки предупреждают прямо в панели экспорта', () => {
+  const warn = document.getElementById('kt-export-warn');
+  assert.ok(warn && !warn.hidden, 'предупреждение показано');
+  assert.ok(/Проверки не выполняются/.test(warn.textContent), 'сказано, что проверки не выполняются');
+  assert.ok(exportText().indexOf('⚠ Проверки не выполняются') > 0, 'и в тексте плана тоже');
+  assert.ok(document.getElementById('kt-warnings').textContent.indexOf('Джона Сноу') === -1,
+    'условие на будущее не попадает в проверки');
+  assert.ok(document.getElementById('kt-req').textContent.indexOf('На будущие жизни') >= 0,
+    'условие показано отдельной памяткой');
+});
+
+function rowByTitleIn(doc, title) {
+  for (const row of doc.querySelectorAll('.row.item')) {
+    const t = row.querySelector('.item-title');
+    if (t && t.textContent.indexOf(title) >= 0) return row;
+  }
+  return null;
+}
+
 if (failures) {
   console.error('\nПровалено проверок: ' + failures);
   process.exit(1);

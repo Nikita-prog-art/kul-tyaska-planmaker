@@ -59,6 +59,26 @@ type ShopItem struct {
 	// с пометкой «уже куплено», опыт за неё списывается как обычно, а урок
 	// занимает свой номер, так что нумерация продолжается со следующего.
 	AlreadyPaid bool `json:"already_paid,omitempty"`
+	// RewardAfter — награда за порядок: позицию надо взять ПОСЛЕ другой
+	// позиции, иначе награда теряется («последний бой» после «пинг систем»).
+	RewardAfter *RewardAfter `json:"reward_after,omitempty"`
+}
+
+// RewardAfter — условие «возьми это после того»: если позиция стоит в плане
+// раньше указанной, награда не достаётся.
+type RewardAfter struct {
+	Key   string `json:"key"`
+	Title string `json:"title,omitempty"` // название награды, по умолчанию «квестовая награда»
+	Note  string `json:"note,omitempty"`  // что именно даёт награда
+	Lose  string `json:"lose,omitempty"`  // что теряется, если взять раньше
+}
+
+// TitleOr возвращает название награды.
+func (r *RewardAfter) TitleOr() string {
+	if r == nil || r.Title == "" {
+		return "квестовая награда"
+	}
+	return r.Title
 }
 
 // Requirement — условие, которому должен удовлетворять план
@@ -67,6 +87,10 @@ type Requirement struct {
 	Kind    string   `json:"kind"` // any_of | all_of
 	Keys    []string `json:"keys"`
 	Message string   `json:"message"`
+	// Soft — условие «на будущие жизни»: его невыполнение ничего не ломает
+	// (например, повторная встреча с Джоном Сноу возможна только через жизнь),
+	// поэтому оно не попадает в «Проверки», а печатается отдельной памяткой.
+	Soft bool `json:"soft,omitempty"`
 }
 
 // Pick — выбранная позиция плана. Порядок в срезе = порядок покупки,
@@ -137,10 +161,10 @@ type Options struct {
 
 // Plan — план перерождения.
 type Plan struct {
-	ID      string `json:"id"`
-	UserID  string `json:"user_id"`
-	Title   string `json:"title"`
-	Emoji   string `json:"emoji,omitempty"`
+	ID      string  `json:"id"`
+	UserID  string  `json:"user_id"`
+	Title   string  `json:"title"`
+	Emoji   string  `json:"emoji,omitempty"`
 	Balance float64 `json:"balance"`
 
 	// Каркас посмертия: скелет магазина, который готовится под конкретную
@@ -215,6 +239,23 @@ func (p *Plan) Normalize() {
 		}
 		if it.AlreadyPaid {
 			it.Locked = true
+		}
+	}
+	// Награда за порядок бессмысленна, если опорной позиции нет в магазине.
+	for i := range p.Shop {
+		it := &p.Shop[i]
+		if it.RewardAfter == nil {
+			continue
+		}
+		found := false
+		for _, other := range p.Shop {
+			if other.Key == it.RewardAfter.Key {
+				found = true
+				break
+			}
+		}
+		if !found {
+			it.RewardAfter = nil
 		}
 	}
 	for i := range p.Ladders {

@@ -68,9 +68,14 @@ func planView(p *plan.Plan) map[string]any {
 
 // summaryView — расчёт плана для шаблонов.
 func summaryView(s *plan.Summary) map[string]any {
+	future := make([]map[string]any, 0, len(s.Future))
+	for _, f := range s.Future {
+		future = append(future, map[string]any{"text": f.Text, "met": f.Met})
+	}
 	return map[string]any{
 		"sections": s.Sections, "warnings": s.Warnings, "total": s.Total,
 		"remainder": s.Remainder, "balance": s.Balance,
+		"future": future, "rewards": s.Rewards,
 	}
 }
 

@@ -41,6 +41,16 @@ type Summary struct {
 	DeferredLimit int              `json:"deferred_limit"`
 	DeferredUsed  int              `json:"deferred_used"`
 	NotTaken      []Line           `json:"not_taken_lines"`
+	// Rewards — награды за порядок, которые план получает.
+	Rewards []string `json:"rewards,omitempty"`
+	// Future — условия «на будущие жизни»: памятка, а не проверка.
+	Future []FutureNote `json:"future,omitempty"`
+}
+
+// FutureNote — условие каркаса, которое касается будущих жизней.
+type FutureNote struct {
+	Text string `json:"text"`
+	Met  bool   `json:"met"`
 }
 
 // LessonOrdinal — номер урока по ключу позиции.
@@ -50,7 +60,8 @@ type LessonOrdinal map[string]int
 func Compute(p *Plan) *Summary {
 	lines := map[string][]Line{}
 	ordinals := LessonOrdinal{}
-	var warnings []string
+	var warnings, rewards []string
+	var future []FutureNote
 	total := 0.0
 
 	// Уроки: порядок покупки задаёт нумерацию и цену.
@@ -95,23 +106,17 @@ func Compute(p *Plan) *Summary {
 		}
 	}
 	for _, req := range p.Requirements {
-		if req.Kind == "all_of" {
-			for _, k := range req.Keys {
-				if !p.Picked(k) {
-					warnings = append(warnings, requirementWarning(p, req, k))
-				}
-			}
+		missed := missingRequirementKeys(p, req)
+		if req.Soft {
+			// Условие «на будущие жизни»: не проверка, а памятка.
+			future = append(future, FutureNote{
+				Text: requirementText(p, req, ""),
+				Met:  len(missed) == 0,
+			})
 			continue
 		}
-		ok := false
-		for _, k := range req.Keys {
-			if p.Picked(k) {
-				ok = true
-				break
-			}
-		}
-		if !ok {
-			warnings = append(warnings, requirementWarning(p, req, ""))
+		for _, k := range missed {
+			warnings = append(warnings, requirementWarning(p, req, k))
 		}
 	}
 
@@ -180,10 +185,39 @@ func Compute(p *Plan) *Summary {
 		})
 	}
 
+	// Награды за порядок: «возьми эту позицию после той».
+	for i := range p.Shop {
+		it := &p.Shop[i]
+		reward := it.RewardAfter
+		if reward == nil || reward.Key == "" || !p.Picked(it.Key) || p.IsDeferred(it.Key) {
+			continue
+		}
+		refIdx := pickIndex(p, reward.Key)
+		if refIdx < 0 {
+			continue // опорной позиции в плане нет — сравнивать не с чем
+		}
+		text := reward.TitleOr()
+		if reward.Note != "" {
+			text += ": " + reward.Note
+		}
+		if pickIndex(p, it.Key) > refIdx {
+			rewards = append(rewards, fmt.Sprintf("«%s»: %s", displayTitle(it), text))
+			noteLine(lines, it.Key, text)
+			continue
+		}
+		lost := reward.Lose
+		if lost == "" {
+			lost = reward.Note
+		}
+		warnings = append(warnings, fmt.Sprintf("«%s» стоит раньше «%s» — %s не получена%s",
+			displayTitle(it), itemTitle(p, reward.Key), reward.TitleOr(), loseSuffix(lost)))
+	}
+
 	// Итоги по секциям в фиксированном порядке.
 	summary := &Summary{
 		Balance: p.Balance, Total: total, Remainder: p.Balance - total,
-		Warnings: warnings, DeferredLimit: deferredLimit, DeferredUsed: deferredUsed,
+		Warnings: warnings, Rewards: rewards, Future: future,
+		DeferredLimit: deferredLimit, DeferredUsed: deferredUsed,
 	}
 	run := p.Balance
 	for _, sec := range Sections {
@@ -264,25 +298,84 @@ func lockSuffix(it *ShopItem) string {
 	return ""
 }
 
-// requirementWarning собирает текст предупреждения по условию каркаса.
-func requirementWarning(p *Plan, req Requirement, key string) string {
-	title := req.Message
-	if title == "" {
-		var names []string
-		if key != "" {
-			names = append(names, itemTitle(p, key))
-		} else {
-			for _, k := range req.Keys {
-				names = append(names, itemTitle(p, k))
-			}
-		}
-		if req.Kind == "all_of" {
-			title = "нужно взять: " + strings.Join(names, ", ")
-		} else {
-			title = "нужно взять одно из: " + strings.Join(names, ", ")
+// loseSuffix добавляет пояснение к потерянной награде.
+func loseSuffix(lost string) string {
+	if lost != "" {
+		return " (" + lost + ")"
+	}
+	return ""
+}
+
+// pickIndex возвращает место позиции в очереди покупок, -1 если её нет.
+func pickIndex(p *Plan, key string) int {
+	for i, pk := range p.Picks {
+		if pk.Key == key {
+			return i
 		}
 	}
-	return "условие каркаса не выполнено — " + title
+	return -1
+}
+
+// noteLine дописывает пометку к строке плана (например, про квестовую награду).
+func noteLine(lines map[string][]Line, key, text string) {
+	for sec, ls := range lines {
+		for i := range ls {
+			if ls[i].Key != key {
+				continue
+			}
+			if ls[i].Note == "" {
+				ls[i].Note = text
+			} else {
+				ls[i].Note += ", " + text
+			}
+			lines[sec] = ls
+			return
+		}
+	}
+}
+
+// missingRequirementKeys перечисляет, чего не хватает для условия каркаса.
+// Для «любого из» возвращает одиночный пустой ключ — условие не выполнено целиком.
+func missingRequirementKeys(p *Plan, req Requirement) []string {
+	if req.Kind == "all_of" {
+		var out []string
+		for _, k := range req.Keys {
+			if !p.Picked(k) {
+				out = append(out, k)
+			}
+		}
+		return out
+	}
+	for _, k := range req.Keys {
+		if p.Picked(k) {
+			return nil
+		}
+	}
+	return []string{""}
+}
+
+// requirementText описывает условие каркаса без оценки «выполнено/нет».
+func requirementText(p *Plan, req Requirement, key string) string {
+	if req.Message != "" {
+		return req.Message
+	}
+	var names []string
+	if key != "" {
+		names = append(names, itemTitle(p, key))
+	} else {
+		for _, k := range req.Keys {
+			names = append(names, itemTitle(p, k))
+		}
+	}
+	if req.Kind == "all_of" {
+		return "нужно взять: " + strings.Join(names, ", ")
+	}
+	return "нужно взять одно из: " + strings.Join(names, ", ")
+}
+
+// requirementWarning собирает текст предупреждения по условию каркаса.
+func requirementWarning(p *Plan, req Requirement, key string) string {
+	return "условие каркаса не выполнено — " + requirementText(p, req, key)
 }
 
 func itemTitle(p *Plan, key string) string {

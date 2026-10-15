@@ -351,6 +351,43 @@ textarea { resize: vertical; line-height: 1.5; }
 .req.met .req-mark { color: var(--jade); }
 .req.unmet .req-mark { color: var(--blood); }
 .req.unmet .req-text { color: #ffd8b8; }
+/* Условие «на будущие жизни»: памятка, а не проверка — не пугает красным. */
+.req.soft { opacity: .85; }
+.req.soft .req-mark { color: var(--muted); }
+.req.soft.unmet .req-text { color: var(--muted); }
+.req.soft.met .req-mark { color: var(--jade-dim); }
+
+/* Награды за порядок: «возьми этот урок после того». */
+.reward-list { margin: 6px 0 0; padding-left: 18px; font-size: 13px; color: var(--jade); }
+.reward-hint { margin-top: 4px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.reward-hint.got { color: var(--jade); }
+.reward-hint.lost { color: var(--gold); }
+.reward-hint.idle { color: var(--muted); }
+.tag.ok { border-color: var(--jade-dim); color: var(--jade); }
+
+/* Проваленные проверки при экспорте. */
+.export-warn {
+  border: 1px solid var(--blood-dim);
+  background: linear-gradient(180deg, rgba(210, 86, 79, .12), transparent);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+.export-warn b { color: #ffb3ad; }
+.export-warn .warn-list { margin: 6px 0 4px; padding-left: 18px; }
+.future-list { margin: 6px 0; padding-left: 18px; font-size: 13px; }
+.future-list .unmet { color: var(--muted); }
+.future-list .met { color: var(--jade); }
+
+/* Шкала: «уже есть» — база, за неё опыт не списывается. */
+.ladder-hint { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+input.num.ladder-owned {
+  width: 62px;
+  padding: 2px 4px;
+  font-size: 12px;
+  border-color: var(--gold-dim);
+  color: var(--gold);
+}
 
 .badge {
   display: grid;

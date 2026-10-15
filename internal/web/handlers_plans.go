@@ -106,23 +106,23 @@ func (s *Server) handlePlanEdit(w http.ResponseWriter, r *http.Request) {
 
 // saveState — состояние редактора, которое присылает браузер.
 type saveState struct {
-	Title        string                 `json:"title"`
-	Emoji        string                 `json:"emoji"`
-	Balance      float64                `json:"balance"`
-	Notes        string                 `json:"notes"`
-	Decimals     bool                   `json:"decimals"`
-	Skeleton     string                 `json:"skeleton"`
-	Earned       float64                `json:"earned"`
-	Mults        []string               `json:"multipliers"`
-	Source       string                 `json:"source"`
-	Shop         []plan.ShopItem        `json:"shop"`
-	Picks        []plan.Pick            `json:"picks"`
-	Deferred     []plan.Deferred        `json:"deferred"`
-	NotTaken     []string               `json:"not_taken"`
-	Ladders      []plan.LadderCfg       `json:"ladders"`
-	Accumulators []plan.Accumulator     `json:"accumulators"`
-	Folios       []plan.Folio           `json:"folios"`
-	Requirements []plan.Requirement     `json:"requirements"`
+	Title        string             `json:"title"`
+	Emoji        string             `json:"emoji"`
+	Balance      float64            `json:"balance"`
+	Notes        string             `json:"notes"`
+	Decimals     bool               `json:"decimals"`
+	Skeleton     string             `json:"skeleton"`
+	Earned       float64            `json:"earned"`
+	Mults        []string           `json:"multipliers"`
+	Source       string             `json:"source"`
+	Shop         []plan.ShopItem    `json:"shop"`
+	Picks        []plan.Pick        `json:"picks"`
+	Deferred     []plan.Deferred    `json:"deferred"`
+	NotTaken     []string           `json:"not_taken"`
+	Ladders      []plan.LadderCfg   `json:"ladders"`
+	Accumulators []plan.Accumulator `json:"accumulators"`
+	Folios       []plan.Folio       `json:"folios"`
+	Requirements []plan.Requirement `json:"requirements"`
 }
 
 func (s *Server) handlePlanSave(w http.ResponseWriter, r *http.Request) {

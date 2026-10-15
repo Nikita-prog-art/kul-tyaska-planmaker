@@ -58,8 +58,8 @@ func fixturePlan(t *testing.T) *plan.Plan {
 			l.Value = v
 		}
 	}
-	set("talent.die", 9)
-	set("talent.dice_count", 3)
+	set("talent.die", 24)
+	set("talent.dice_count", 5)
 	set("talent.flat", 1)
 	set("roots.max", 10)
 	set("roots.min", 3)
@@ -134,12 +134,12 @@ func TestLadderCosts(t *testing.T) {
 		value float64
 		want  float64
 	}{
-		{"talent.die", 1, 0},          // талант 1 — стартовое значение
-		{"talent.die", 3, 2 + 3},      // d2 + d3
+		{"talent.die", 1, 0},     // талант 1 — стартовое значение
+		{"talent.die", 3, 2 + 3}, // d2 + d3
 		{"talent.dice_count", 3, 10 + 20},
 		{"talent.flat", 2, 5 + 10},
-		{"roots.max", 10, 10},         // два шага по 5
-		{"roots.min", 3, 1 + 2 + 3},   // проценты дорожают
+		{"roots.max", 10, 10},       // два шага по 5
+		{"roots.min", 3, 1 + 2 + 3}, // проценты дорожают
 		{"chance.billion", 2, 1 + 10},
 		{"chance.million_home", 3, 50 + 100 + 150},
 	}
@@ -256,14 +256,49 @@ func TestLockedAndRequirements(t *testing.T) {
 		t.Errorf("второй урок: номер %d, цена %v — ждал 2 и %v", second.Number, second.Cost, plan.LessonCost(2))
 	}
 
-	// Условие про Джона Сноу: пока не взяты ни «контроль пола», ни фолиант — предупреждение.
-	if !hasWarning(sum.Warnings, "Джона Сноу") {
-		t.Errorf("ждал предупреждение об условии каркаса, получил %v", sum.Warnings)
+	// Условие про Джона Сноу — памятка «на будущие жизни», а не проверка.
+	if hasWarning(sum.Warnings, "Джона Сноу") {
+		t.Errorf("условие на будущее не должно попадать в проверки: %v", sum.Warnings)
+	}
+	if len(sum.Future) != 1 || sum.Future[0].Met {
+		t.Fatalf("ждал одно невыполненное условие на будущее, получил %+v", sum.Future)
+	}
+	if !strings.Contains(sum.Future[0].Text, "Джона Сноу") {
+		t.Errorf("в памятке нет условия про Джона Сноу: %q", sum.Future[0].Text)
 	}
 	p.Picks = append(p.Picks, plan.Pick{Key: "item:vybor_pola"})
 	p.Normalize()
-	if hasWarning(plan.Compute(p).Warnings, "Джона Сноу") {
-		t.Error("после «контроля пола» условие должно выполняться")
+	if fut := plan.Compute(p).Future; len(fut) != 1 || !fut[0].Met {
+		t.Errorf("после «контроля пола» условие должно быть выполнено: %+v", fut)
+	}
+
+	// Награда за порядок: «последний бой» после «пинг систем».
+	// «Пинг систем» обязателен и приезжает сам, поэтому ставим «последний бой»
+	// перед ним — награда теряется.
+	p3 := sk.NewPlan("u3", "Награда", "")
+	p3.Picks = []plan.Pick{{Key: "lesson:posledniy_boy"}}
+	p3.Normalize()
+	lost := plan.Compute(p3)
+	if !hasWarning(lost.Warnings, "квестовая награда не получена") {
+		t.Errorf("ждал предупреждение о потерянной награде, получил %v", lost.Warnings)
+	}
+	// Ставим «последний бой» сразу после «пинг систем» — награда достаётся.
+	p4 := sk.NewPlan("u4", "Награда", "")
+	p4.Picks = []plan.Pick{{Key: "lesson:ping_sistem"}, {Key: "lesson:posledniy_boy"}}
+	p4.Normalize()
+	got := plan.Compute(p4)
+	if hasWarning(got.Warnings, "квестовая награда") {
+		t.Errorf("награда не должна теряться: %v", got.Warnings)
+	}
+	if len(got.Rewards) != 1 || !strings.Contains(got.Rewards[0], "последний бой") {
+		t.Fatalf("ждал одну награду за порядок, получил %+v", got.Rewards)
+	}
+	txt := plan.Render(p4, got)
+	if !strings.Contains(txt, "квестовая награда") {
+		t.Error("в тексте плана нет пометки о квестовой награде")
+	}
+	if !strings.Contains(txt, "⚠ Проверки не выполняются") {
+		t.Error("в тексте плана нет предупреждения о проваленных проверках")
 	}
 
 	// Обязательную позицию нельзя отложить невыученными уроками.

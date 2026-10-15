@@ -69,6 +69,11 @@ if printf '%s' "$EDITOR" | grep -q '"requirements"'; then
 else
   bad "в каркасе нет requirements"
 fi
+if printf '%s' "$EDITOR" | grep -q '"reward_after"'; then
+  ok "награда за порядок приехала в каркасе"
+else
+  bad "в каркасе нет reward_after («последний бой» после «пинг систем»)"
+fi
 TXT0="$(curl -sS --max-time 20 -b "$JAR" "$LOC/export?format=txt")"
 if printf '%s' "$TXT0" | grep -q "уже куплено"; then
   ok "в экспорте есть пометка «уже куплено»"
@@ -86,10 +91,23 @@ if printf '%s' "$TXT0" | grep -q "отключение тренировок: 0 (
 else
   bad "заплатки «отключение тренировок» нет в плане"
 fi
-if printf '%s' "$TXT0" | grep -q "Джона Сноу"; then
-  ok "невыполненное условие попало в проверки"
+# Проваленные проверки видны сразу: у свежего плана «пинг систем» стоит вторым,
+# а по тексту он минимум десятый.
+if printf '%s' "$TXT0" | grep -q "⚠ Проверки не выполняются"; then
+  ok "экспорт предупреждает, что проверки не выполняются"
 else
-  bad "условие каркаса не попало в проверки"
+  bad "в экспорте нет строки «⚠ Проверки не выполняются»"
+fi
+# Условие про Джона Сноу — памятка на будущие жизни, а не проверка.
+if printf '%s' "$TXT0" | grep -q "На будущие жизни:" && printf '%s' "$TXT0" | grep -q "Джона Сноу"; then
+  ok "условие про Джона Сноу уехало в памятку «На будущие жизни»"
+else
+  bad "условие про Джона Сноу не попало в памятку"
+fi
+if printf '%s' "$TXT0" | grep -q "условие каркаса не выполнено — чтобы снова встретить"; then
+  bad "условие на будущее всё ещё валит проверки"
+else
+  ok "условие на будущее проверки не валит"
 fi
 
 TXT="$(curl -sS --max-time 20 -b "$JAR" "$LOC/export?format=txt")"
@@ -99,6 +117,17 @@ for needle in "Невыученные" "Остаток" "Итого потрач
 done
 
 check "страница экспорта" "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 -b "$JAR" "$LOC/export")" "200"
+PAGE="$(curl -sS --max-time 20 -b "$JAR" "$LOC/export")"
+if printf '%s' "$PAGE" | grep -q 'export-warn'; then
+  ok "на странице экспорта висит предупреждение о проверках"
+else
+  bad "на странице экспорта нет предупреждения о проверках"
+fi
+if printf '%s' "$PAGE" | grep -q "На будущие жизни"; then
+  ok "на странице экспорта есть памятка «На будущие жизни»"
+else
+  bad "на странице экспорта нет памятки «На будущие жизни»"
+fi
 check "справка по механике" "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$BASE/guide")" "200"
 check "каркас отдаётся файлом" "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$BASE/presets/08-zaskoruzlye-piramidy")" "200"
 check "профиль" "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 -b "$JAR" "$BASE/profile")" "200"

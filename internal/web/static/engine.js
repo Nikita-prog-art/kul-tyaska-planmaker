@@ -63,6 +63,8 @@
     var items = itemMap(plan);
     var bySection = {};
     var warnings = [];
+    var rewards = [];
+    var future = [];
     var total = 0;
     var deferredKeys = {};
     (plan.deferred || []).forEach(function (d) { deferredKeys[d.key] = true; });
@@ -100,15 +102,13 @@
       }
     });
     (plan.requirements || []).forEach(function (req) {
-      var keys = req.keys || [];
-      if (req.kind === 'all_of') {
-        keys.forEach(function (k) {
-          if (!picked(plan, k)) warnings.push(requirementWarning(plan, req, k));
-        });
+      var missed = missingRequirementKeys(plan, req);
+      if (req.soft) {
+        // Условие «на будущие жизни»: не проверка, а памятка.
+        future.push({ text: requirementText(plan, req, ''), met: missed.length === 0 });
         return;
       }
-      var ok = keys.some(function (k) { return picked(plan, k); });
-      if (!ok) warnings.push(requirementWarning(plan, req, ''));
+      missed.forEach(function (k) { warnings.push(requirementWarning(plan, req, k)); });
     });
 
     // Отложенные уроки: бесплатно, без номера.
@@ -151,6 +151,24 @@
       });
     });
 
+    // Награды за порядок: «возьми эту позицию после той».
+    (plan.shop || []).forEach(function (it) {
+      var r = it.reward_after;
+      if (!r || !r.key || !picked(plan, it.key) || deferredKeys[it.key]) return;
+      var refIdx = pickIndex(plan, r.key);
+      if (refIdx < 0) return; // опорной позиции в плане нет — сравнивать не с чем
+      var title = r.title || 'квестовая награда';
+      var text = title + (r.note ? ': ' + r.note : '');
+      if (pickIndex(plan, it.key) > refIdx) {
+        rewards.push('«' + it.title + '»: ' + text);
+        noteLine(bySection, it.key, text);
+        return;
+      }
+      var lost = r.lose || r.note || '';
+      warnings.push('«' + it.title + '» стоит раньше «' + itemTitle(plan, r.key) + '» — ' + title +
+        ' не получена' + (lost ? ' (' + lost + ')' : ''));
+    });
+
     var order = (sections || []).slice().sort(function (a, b) { return (a.order || 99) - (b.order || 99); });
     var out = [];
     var run = Number(plan.balance) || 0;
@@ -176,7 +194,8 @@
 
     return {
       sections: out, total: total, remainder: run, balance: Number(plan.balance) || 0,
-      warnings: warnings, deferredLimit: limit, deferredUsed: used,
+      warnings: warnings, rewards: rewards, future: future,
+      deferredLimit: limit, deferredUsed: used,
       notTaken: notTaken, paidLessons: paid
     };
   }
@@ -191,6 +210,41 @@
     return (plan.picks || []).some(function (p) { return p.key === key; });
   }
 
+  /* pickIndex — место позиции в очереди покупок, -1 если её нет. */
+  function pickIndex(plan, key) {
+    var picks = plan.picks || [];
+    for (var i = 0; i < picks.length; i++) {
+      if (picks[i].key === key) return i;
+    }
+    return -1;
+  }
+
+  /* noteLine — дописывает пометку к строке плана (как в Go). */
+  function noteLine(bySection, key, text) {
+    Object.keys(bySection).forEach(function (sec) {
+      bySection[sec].forEach(function (l) {
+        if (l.key !== key) return;
+        l.note = l.note ? l.note + ', ' + text : text;
+      });
+    });
+  }
+
+  /* missingRequirementKeys — чего не хватает для условия каркаса. */
+  function missingRequirementKeys(plan, req) {
+    var keys = req.keys || [];
+    if (req.kind === 'all_of') {
+      return keys.filter(function (k) { return !picked(plan, k); });
+    }
+    return keys.some(function (k) { return picked(plan, k); }) ? [] : [''];
+  }
+
+  /* requirementText — условие каркаса без оценки «выполнено/нет». */
+  function requirementText(plan, req, key) {
+    if (req.message) return req.message;
+    var names = key ? [itemTitle(plan, key)] : (req.keys || []).map(function (k) { return itemTitle(plan, k); });
+    return (req.kind === 'all_of' ? 'нужно взять: ' : 'нужно взять одно из: ') + names.join(', ');
+  }
+
   function itemTitle(plan, key) {
     var it = itemMap(plan)[key];
     return it ? it.title : key;
@@ -198,10 +252,7 @@
 
   /* requirementWarning — текст предупреждения по условию каркаса (как в Go). */
   function requirementWarning(plan, req, key) {
-    if (req.message) return 'условие каркаса не выполнено — ' + req.message;
-    var names = key ? [itemTitle(plan, key)] : (req.keys || []).map(function (k) { return itemTitle(plan, k); });
-    var prefix = req.kind === 'all_of' ? 'нужно взять: ' : 'нужно взять одно из: ';
-    return 'условие каркаса не выполнено — ' + prefix + names.join(', ');
+    return 'условие каркаса не выполнено — ' + requirementText(plan, req, key);
   }
 
   function number(v) {
@@ -233,6 +284,12 @@
     var out = [];
     out.push('[*] ' + String(plan.title || '').trim() + (plan.emoji ? ' ' + String(plan.emoji).trim() : ''));
     out.push('');
+
+    // Проваленные проверки видно сразу: план читает Ли Лун, а не только игрок.
+    if ((summary.warnings || []).length) {
+      out.push('⚠ Проверки не выполняются: ' + summary.warnings.length);
+      out.push('');
+    }
 
     (summary.sections || []).forEach(function (sec) {
       out.push(sec.title + ':');
@@ -288,6 +345,15 @@
     if (summary.warnings.length) {
       out.push('Проверки:');
       summary.warnings.forEach(function (w) { out.push('  ! ' + w); });
+      out.push('');
+    }
+
+    // Условия, которые касаются будущих жизней: памятка, а не проверка плана.
+    if ((summary.future || []).length) {
+      out.push('На будущие жизни:');
+      summary.future.forEach(function (f) {
+        out.push('  - ' + String(f.text).trim() + (f.met ? ' — выполнено' : ' — пока не выполнено'));
+      });
       out.push('');
     }
 

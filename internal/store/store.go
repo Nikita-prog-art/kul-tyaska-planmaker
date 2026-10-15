@@ -46,10 +46,10 @@ type Session struct {
 
 // data — содержимое файла базы.
 type data struct {
-	Version  int                    `json:"version"`
-	Users    []*User                `json:"users"`
-	Sessions map[string]*Session    `json:"sessions"`
-	Plans    map[string]*plan.Plan  `json:"plans"`
+	Version  int                   `json:"version"`
+	Users    []*User               `json:"users"`
+	Sessions map[string]*Session   `json:"sessions"`
+	Plans    map[string]*plan.Plan `json:"plans"`
 }
 
 // Store — хранилище с блокировкой и атомарной записью.
