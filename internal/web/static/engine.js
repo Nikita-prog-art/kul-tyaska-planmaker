@@ -101,6 +101,14 @@
         warnings.push('обязательная позиция «' + it.title + '» не взята' + (it.lock_note ? ': ' + it.lock_note : ''));
       }
     });
+    // Покупка с условием: «выкупить метод» без самого урока метода — деньги
+    // на ветер, о таком лучше сказать сразу (как и Go-движок).
+    (plan.shop || []).forEach(function (it) {
+      if (!picked(plan, it.key)) return;
+      missingPrereqs(plan, it.requires).forEach(function (k) {
+        warnings.push('«' + it.title + '» взят без «' + itemTitle(plan, k) + '»');
+      });
+    });
     (plan.requirements || []).forEach(function (req) {
       var missed = missingRequirementKeys(plan, req);
       if (req.soft) {
@@ -250,6 +258,87 @@
     return it ? it.title : key;
   }
 
+  function isDeferredKey(plan, key) {
+    return (plan.deferred || []).some(function (d) { return d.key === key; });
+  }
+
+  /* missingPrereqs — чего из requires нет в плане. Отложенный урок считается
+     взятым: он уезжает в следующую жизнь, а не пропадает. */
+  function missingPrereqs(plan, keys) {
+    var out = [];
+    (keys || []).forEach(function (key) {
+      if (!key) return;
+      if (picked(plan, key) || isDeferredKey(plan, key)) return;
+      out.push(key);
+    });
+    return out;
+  }
+
+  /* prereqText — «название (цена)» для подсказки о недостающей покупке. */
+  function prereqText(plan, key) {
+    var it = itemMap(plan)[key];
+    if (!it) return key;
+    var title = it.title || key;
+    if (Number(it.cost) > 0) return title + ' (' + number(it.cost) + ' XP)';
+    return title;
+  }
+
+  /* round6 убирает мусор от сложения дробей (0,8 + 20% = ровно 1). */
+  function round6(v) { return Math.round(Number(v) * 1e6) / 1e6; }
+
+  /* accumulatorState — можно ли активировать накопитель: он должен быть
+     куплен (если каркас этого требует) и полностью заряжен. */
+  function accumulatorState(plan, acc) {
+    var missing = missingPrereqs(plan, acc.requires);
+    if (missing.length) {
+      return {
+        ready: false,
+        reason: 'сначала купи ' + missing.map(function (k) { return prereqText(plan, k); }).join(', ')
+      };
+    }
+    // Если про заряды в тексте ничего не известно, проверять нечего.
+    if (Number(acc.charges) !== 0 || Number(acc.rate) !== 0) {
+      var charges = round6(Number(acc.charges) + Number(acc.rate) / 100);
+      var max = Number(acc.max);
+      if (charges + 1e-9 < max) {
+        var rate = Number(acc.rate);
+        var tail = rate ? ' (с +' + number(rate) + '% за жизнь)' : '';
+        return { ready: false, reason: 'заряд не полный: ' + number(charges) + ' из ' + number(max) + tail };
+      }
+    }
+    return { ready: true, reason: '' };
+  }
+
+  /* folioState — можно ли взять фолиант с собой: сначала урок метода, потом
+     выкуп. Сам выбор фолианта бесплатный — он оплачен этими покупками. */
+  function folioState(plan, folio) {
+    var missing = missingPrereqs(plan, folio.requires);
+    if (!missing.length) return { ready: true, reason: '' };
+    var lessons = [], buys = [];
+    missing.forEach(function (key) {
+      var it = itemMap(plan)[key];
+      if (it && it.kind === 'lesson') lessons.push('«' + (it.title || key) + '»');
+      else buys.push(prereqText(plan, key));
+    });
+    var parts = [];
+    if (lessons.length) parts.push('сначала урок ' + lessons.join(', '));
+    if (buys.length) parts.push('нужен выкуп ' + buys.join(', '));
+    return { ready: false, reason: parts.join(', ') };
+  }
+
+  /* pruneAttachments — снимает отметки, которые план позволить не может
+     (незаряженный накопитель, невыкупленный фолиант). Возвращает число снятых. */
+  function pruneAttachments(plan) {
+    var changed = 0;
+    (plan.accumulators || []).forEach(function (a) {
+      if (a.activate && !accumulatorState(plan, a).ready) { a.activate = false; changed++; }
+    });
+    (plan.folios || []).forEach(function (f) {
+      if (f.take && !folioState(plan, f).ready) { f.take = false; changed++; }
+    });
+    return changed;
+  }
+
   /* requirementWarning — текст предупреждения по условию каркаса (как в Go). */
   function requirementWarning(plan, req, key) {
     return 'условие каркаса не выполнено — ' + requirementText(plan, req, key);
@@ -392,6 +481,10 @@
     nextLadderStep: nextLadderStep,
     visibleLadders: visibleLadders,
     itemMap: itemMap,
+    missingPrereqs: missingPrereqs,
+    accumulatorState: accumulatorState,
+    folioState: folioState,
+    pruneAttachments: pruneAttachments,
     fmt: fmt,
     number: number
   };

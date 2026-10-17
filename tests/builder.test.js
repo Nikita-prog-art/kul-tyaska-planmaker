@@ -66,12 +66,34 @@ window.eval(fs.readFileSync(path.join(root, 'internal/web/static/builder.js'), '
 // --- помощники ---------------------------------------------------------
 
 function rowByTitle(title) {
-  const rows = document.querySelectorAll('.row.item');
+  return rowByTitleIn(document, title);
+}
+
+// rowByTitleIn ищет строку магазина в конкретном документе: страниц в тесте много.
+function rowByTitleIn(doc, title) {
+  const rows = doc.querySelectorAll('.row.item');
   for (const row of rows) {
     const t = row.querySelector('.item-title');
     if (t && t.textContent.indexOf(title) >= 0) return row;
   }
   throw new Error('не нашёл строку «' + title + '»');
+}
+
+// attachByRe ищет строку панели «Накопители и фолианты».
+function attachByRe(doc, re) {
+  const items = doc.querySelectorAll('#kt-attach .attach');
+  for (const item of items) {
+    if (re.test(item.textContent)) return item;
+  }
+  throw new Error('не нашёл отметку ' + re);
+}
+
+// pickIn нажимает «беру» у строки магазина на отдельной странице.
+function pickIn(doc, title) {
+  const row = rowByTitleIn(doc, title);
+  const btn = row.querySelector('[data-act="pick"]');
+  if (!btn) throw new Error('у строки «' + title + '» нет кнопки «беру»');
+  btn.click();
 }
 
 function click(sel, where) {
@@ -474,6 +496,61 @@ test('накопители и фолианты отмечаются отдель
   const txt = d.getElementById('kt-export-text').value;
   assert.ok(!/беру с собой:[^\n]*Непроглядного/.test(txt), 'ушёл из «беру с собой»');
   assert.ok(/оставляю в библиотеке:[^\n]*Непроглядного/.test(txt), 'попал в «оставляю в библиотеке»');
+});
+
+test('«минимум n-м уроком» зеленеет, когда условие выполнено', () => {
+  const p = JSON.parse(JSON.stringify(plan));
+  // «максимум зарядов великого успеха» (минимум вторым) ставим сразу после
+  // уже купленного «поцелуя Мелисандры» — требование выполняется.
+  p.picks.splice(1, 0, { key: 'lesson:maksimum_zaradov', qty: 1 });
+  const d = bootPage(p).document;
+
+  const good = rowByTitleIn(d, 'максимум зарядов великого успеха').querySelector('[data-min-tag]');
+  assert.ok(good, 'тег «минимум n-ным» на месте');
+  assert.ok(good.classList.contains('ok') && !good.classList.contains('warn'), 'выполненное требование зелёное');
+  assert.ok(/условие выполнено/.test(good.title), 'в подсказке видно, что условие выполнено');
+
+  const bad = rowByTitleIn(d, 'пинг систем').querySelector('[data-min-tag]');
+  assert.ok(bad.classList.contains('warn') && !bad.classList.contains('ok'), 'нарушенное требование красное');
+});
+
+test('отметить можно только заряженный и купленный накопитель', () => {
+  const d = bootPage(JSON.parse(JSON.stringify(plan))).document;
+  // «горожане» заряжаются за эту жизнь (0,8 + 20% = полный заряд) — можно.
+  assert.strictEqual(attachByRe(d, /горожане/).querySelector('input').disabled, false, 'заряженный накопитель доступен');
+  // «окрестности Му» заряжены на 4% — нельзя.
+  const mu = attachByRe(d, /окрестности/);
+  assert.strictEqual(mu.querySelector('input').disabled, true, 'незаряженный накопитель не отметить');
+  assert.ok(/заряд не полный/.test(mu.textContent), 'сказано, сколько заряда не хватает');
+  // «равновесие зла и добра» в план не куплено — нельзя.
+  const ravno = attachByRe(d, /равновесие/);
+  assert.strictEqual(ravno.querySelector('input').disabled, true, 'некупленный накопитель не отметить');
+  assert.ok(/сначала купи/.test(ravno.textContent), 'сказано, что сначала купить');
+});
+
+test('взять фолиант можно после урока и выкупа, и это бесплатно', () => {
+  const p = JSON.parse(JSON.stringify(plan));
+  // Снимаем урок метода и выкуп: брать фолиант нечем.
+  p.picks = p.picks.filter((x) => x.key !== 'folio:vykupit_tuman' && x.key !== 'lesson:metod_neproglyadnogo_tumana');
+  p.folios[0].take = true; // заодно проверяем, что незаслуженная отметка снимается
+  const d = bootPage(p).document;
+
+  const tuman = () => attachByRe(d, /Непроглядного Тумана/);
+  assert.strictEqual(tuman().querySelector('input').disabled, true, 'без урока и выкупа фолиант не взять');
+  assert.strictEqual(tuman().querySelector('input').checked, false, 'незаслуженная отметка снята');
+  assert.ok(/сначала урок/.test(tuman().textContent) && /нужен выкуп/.test(tuman().textContent),
+    'сказано и про урок, и про выкуп');
+
+  // Покупаем урок метода и выкуп — галочка открывается.
+  pickIn(d, 'метод Непроглядного Тумана');
+  pickIn(d, 'выкупить метод Непроглядного Тумана');
+  assert.strictEqual(tuman().querySelector('input').disabled, false, 'после урока и выкупа фолиант доступен');
+
+  const spent = d.getElementById('sum-spent').textContent;
+  tuman().querySelector('input').click();
+  assert.strictEqual(d.getElementById('sum-spent').textContent, spent, 'сам выбор фолианта бесплатный');
+  assert.ok(/беру с собой:[^\n]*Непроглядного/.test(d.getElementById('kt-export-text').value),
+    'фолиант попал в «беру с собой»');
 });
 
 if (failures) {

@@ -273,7 +273,19 @@ textarea { resize: vertical; line-height: 1.5; }
 }
 .builder-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
-.sidebar { position: sticky; top: 74px; display: flex; flex-direction: column; gap: 12px; }
+/* Сайдбар — отдельная колонка со своим скроллом: иначе его низ виден только
+   в конце страницы. */
+.sidebar {
+  position: sticky;
+  top: 74px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: calc(100vh - 88px);
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+}
 .sidebar .card { padding: 14px 16px; }
 .summary .sum-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 3px 0; }
 .summary .sum-row.big b { font-size: 22px; color: var(--jade); font-family: Georgia, serif; }
@@ -412,8 +424,12 @@ input.num.ladder-owned {
 
 /* Накопители и фолианты: отметки, которых нет в магазине. */
 .attach-list { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
-.attach { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
-.attach input { accent-color: var(--jade); }
+.attach { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; cursor: pointer; }
+.attach input { accent-color: var(--jade); margin-top: 2px; }
+/* Отметка, которую план позволить не может: незаряженный накопитель,
+   фолиант без урока метода и выкупа. */
+.attach.off { color: var(--muted); cursor: not-allowed; }
+.attach.off input { cursor: not-allowed; }
 .ladder-main { display: flex; flex-direction: column; }
 .ladder-ctl { display: flex; align-items: center; gap: 6px; }
 .ladder-ctl input { width: 74px; text-align: center; font-family: var(--mono); }
@@ -477,7 +493,14 @@ input.num.ladder-owned {
 
 @media (max-width: 1000px) {
   .builder-grid { grid-template-columns: 1fr; }
-  .sidebar { position: static; flex-direction: row; flex-wrap: wrap; }
+  .sidebar {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
   .sidebar .card { flex: 1 1 260px; }
   .row.item { grid-template-columns: 30px minmax(0, 1fr) 70px; grid-template-areas: "badge main cost" ". state state" ". order order"; }
   .row.item .item-state, .row.item .item-order, .row.item .item-qty { grid-column: 2 / -1; }

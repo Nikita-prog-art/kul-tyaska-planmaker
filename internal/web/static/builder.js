@@ -287,6 +287,9 @@
   // --- отрисовка --------------------------------------------------------
 
   function render() {
+    // Отметки «активирую» и «беру» план обязан заслужить: если покупку сняли,
+    // незаряженный накопитель или невыкупленный фолиант перестают быть отмеченными.
+    if (KT.pruneAttachments(plan) > 0) markDirty();
     builder.textContent = '';
     builder.appendChild(renderToolbar());
     var grid = h('div', { class: 'builder-grid' }, [
@@ -370,39 +373,55 @@
   }
 
   /* renderAttachments — какие накопители активируем и какие фолианты берём:
-     в плане это отдельные строки, которых в магазине нет. */
+     в плане это отдельные строки, которых в магазине нет. Отметить можно только
+     то, что план действительно может: накопитель — заряженный или купленный,
+     фолиант — с уроком метода и выкупом. Сам выбор фолианта бесплатный. */
   function renderAttachments() {
     var accs = plan.accumulators || [];
     var folios = plan.folios || [];
     if (!accs.length && !folios.length) return null;
     var body = [
       h('h3', { text: 'Накопители и фолианты' }),
-      h('div', { class: 'muted small', text: 'Отметь, что активируешь и какие фолианты берёшь с собой.' })
+      h('div', { class: 'muted small', text: 'Отметь, что активируешь и какие фолианты берёшь с собой. Брать фолиант бесплатно: цена — это покупки «взять фолиант» и «выкупить метод» в магазине.' })
     ];
     if (accs.length) {
       body.push(h('div', { class: 'attach-list' }, accs.map(function (a) {
-        return h('label', { class: 'attach' }, [
+        var st = KT.accumulatorState(plan, a);
+        var label = a.name + (Number(a.charges) || Number(a.rate)
+          ? ' (' + KT.number(a.charges) + '/' + KT.number(a.max) + ', +' + KT.number(a.rate) + '% за жизнь)'
+          : '');
+        if (!st.ready) label += ' — ' + st.reason;
+        return h('label', {
+          class: 'attach' + (st.ready ? '' : ' off'),
+          title: st.ready ? 'можно активировать' : st.reason
+        }, [
           h('input', {
-            type: 'checkbox', checked: !!a.activate,
+            type: 'checkbox', checked: !!a.activate, disabled: !st.ready,
             onchange: function (e) { a.activate = e.target.checked; markDirty(); recompute(); }
           }),
-          h('span', {
-            // Заряды печатаем, только если они вообще известны из текста.
-            text: a.name + (Number(a.charges) || Number(a.rate)
-              ? ' (' + KT.number(a.charges) + '/' + KT.number(a.max) + ', +' + KT.number(a.rate) + '% за жизнь)'
-              : '')
-          })
+          h('span', { text: label })
         ]);
       })));
     }
     if (folios.length) {
       body.push(h('div', { class: 'attach-list' }, folios.map(function (f) {
-        return h('label', { class: 'attach' }, [
+        var st = KT.folioState(plan, f);
+        // Когда каркас не знает условий, показываем как раньше цену выкупа.
+        var label = f.name;
+        if ((f.requires || []).length) {
+          label += st.ready ? ' — выкуп взят, беру' : ' — ' + st.reason;
+        } else if (f.cost) {
+          label += ' — ' + f.cost;
+        }
+        return h('label', {
+          class: 'attach' + (st.ready ? '' : ' off'),
+          title: st.ready ? 'можно взять с собой' : st.reason
+        }, [
           h('input', {
-            type: 'checkbox', checked: !!f.take,
+            type: 'checkbox', checked: !!f.take, disabled: !st.ready,
             onchange: function (e) { f.take = e.target.checked; markDirty(); recompute(); }
           }),
-          h('span', { text: f.name + (f.cost ? ' — ' + f.cost : '') })
+          h('span', { text: label })
         ]);
       })));
     }
@@ -640,7 +659,13 @@
     }
     var reward = rewardHint(it);
     if (reward) tags.push(reward.tag);
-    if (it.min_lesson > 1) tags.push(h('span', { class: 'tag warn', text: 'минимум ' + it.min_lesson + '-м уроком' }));
+    if (it.min_lesson > 1) {
+      tags.push(h('span', {
+        class: 'tag warn', dataset: { minTag: it.min_lesson },
+        title: 'можно взять как минимум ' + it.min_lesson + '-м уроком',
+        text: 'минимум ' + it.min_lesson + '-м уроком'
+      }));
+    }
     if ((it.tags || []).indexOf('one_chance') >= 0) tags.push(h('span', { class: 'tag warn', text: 'только один раз в жизни' }));
     if ((it.tags || []).indexOf('trophy') >= 0) tags.push(h('span', { class: 'tag', text: 'трофей' }));
     if ((it.tags || []).indexOf('osvoeno') >= 0) tags.push(h('span', { class: 'tag', text: 'освоено' }));
@@ -916,6 +941,19 @@
       });
       // подсветка требования «минимум n-ным»
       var num = line && line.number ? line.number : (isPicked(key) ? paidCount : paidCount + 1);
+      var minTag = row.querySelector('[data-min-tag]');
+      if (minTag) {
+        var min = Number(minTag.dataset.minTag) || 1;
+        // Отложенный урок номер не занимает — требование к нему не относится.
+        var met = isDeferred(key) || min <= num;
+        minTag.classList.toggle('ok', met);
+        minTag.classList.toggle('warn', !met);
+        minTag.title = isDeferred(key)
+          ? 'отложен невыученным: номер урока не занимает'
+          : 'можно взять как минимум ' + min + '-м уроком' + (met
+            ? ' — условие выполнено: эта позиция ' + num + '-я'
+            : ' — сейчас эта позиция ' + num + '-я');
+      }
       if (it.kind === 'lesson' && !it.fixed && (it.min_lesson || 1) > num && !isDeferred(key)) {
         row.classList.add('locked');
       } else {

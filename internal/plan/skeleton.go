@@ -146,7 +146,33 @@ func (s *Skeleton) Normalize() error {
 			a.Key = "acc:" + Slug(a.Name)
 		}
 	}
+	// Требования ссылаются на позиции магазина: битые ключи выбрасываем,
+	// иначе накопитель или фолиант навсегда останутся недоступными.
+	for i := range s.Shop {
+		s.Shop[i].Requires = existKeys(seen, s.Shop[i].Requires)
+	}
+	for i := range s.Accumulators {
+		s.Accumulators[i].Requires = existKeys(seen, s.Accumulators[i].Requires)
+	}
+	for i := range s.Folios {
+		f := &s.Folios[i]
+		if f.Key == "" {
+			f.Key = "folio:" + Slug(f.Name)
+		}
+		f.Requires = existKeys(seen, f.Requires)
+	}
 	return nil
+}
+
+// existKeys оставляет только ключи, которые есть в магазине.
+func existKeys(seen map[string]bool, keys []string) []string {
+	var out []string
+	for _, k := range keys {
+		if seen[k] {
+			out = append(out, k)
+		}
+	}
+	return out
 }
 
 // NewPlan создаёт план на основе каркаса.

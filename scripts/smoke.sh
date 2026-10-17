@@ -80,6 +80,18 @@ if printf '%s' "$EDITOR" | grep -q '"repeat":2' && printf '%s' "$EDITOR" | grep 
 else
   bad "в каркасе нет repeat (лестница в небо, взять фолиант)"
 fi
+# Отметки «активирую» и «беру» заслуживаются: у выкупа есть условие-урок,
+# у накопителя — покупка, у фолианта — урок и выкуп.
+if printf '%s' "$EDITOR" | grep -q '"requires": \["lesson:metod_neproglyadnogo_tumana"\]'; then
+  ok "выкуп фолианта требует урок метода"
+else
+  bad "у выкупа фолианта нет requires с уроком метода"
+fi
+if printf '%s' "$EDITOR" | grep -q '"requires": \["item:hardkor"\]'; then
+  ok "накопитель «хардкор» требует покупку"
+else
+  bad "у накопителя «хардкор» нет requires"
+fi
 # Цены сверены с планами игроков: оплата перерождения Джона Сноу — 200 XP.
 if printf '%s' "$EDITOR" | grep -q 'item:pererozhdenie_dzhona'; then
   ok "оплата перерождения Джона Сноу есть в каркасе"

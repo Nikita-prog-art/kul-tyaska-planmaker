@@ -452,6 +452,7 @@
       "title": "выкупить метод Непроглядного Тумана",
       "cost": 50,
       "fixed": true,
+      "requires": ["lesson:metod_neproglyadnogo_tumana"],
       "desc": "Выкуп фолианта необычного качества (метод Непроглядного Тумана). Выкуп не заменяет урок: урок берётся отдельно по общей цене."
     },
     {
@@ -461,6 +462,7 @@
       "title": "выкупить метод Ядовитых Миазмов",
       "cost": 50,
       "fixed": true,
+      "requires": ["lesson:metod_yadovityh_miazmov"],
       "desc": "Выкуп трофейного фолианта (метод Ядовитых Миазмов, Испускаемых Одинокой Пальмой). Сам урок-трофей бесплатен."
     },
     {
@@ -470,6 +472,7 @@
       "title": "выкупить метод Утончённого Поглощения Чистой Инь",
       "cost": 40,
       "fixed": true,
+      "requires": ["lesson:metod_tonkogo_pogloscheniya"],
       "desc": "Выкуп трофейного фолианта (метод Утончённого Поглощения Чистой Инь). Сам урок-трофей бесплатен."
     },
     {
@@ -479,6 +482,7 @@
       "title": "выкупить метод Огненного Водопада",
       "cost": 5,
       "fixed": true,
+      "requires": ["lesson:metod_ognennogo_vodopada"],
       "desc": "Выкуп фолианта плохого качества (метод Огненного Водопада). Выкуп не заменяет урок."
     },
     {
@@ -488,6 +492,7 @@
       "title": "выкупить метод Огненного Дождя",
       "cost": 20,
       "fixed": true,
+      "requires": ["lesson:metod_ognennogo_dozhdya"],
       "desc": "Выкуп фолианта обычного качества (метод Огненного Дождя). Выкуп не заменяет урок."
     },
     {
@@ -676,6 +681,7 @@
       "charges": 0,
       "max": 0,
       "rate": 0,
+      "requires": ["item:hardkor"],
       "note": "механика зарядов в тексте посмертия не расписана; в планах его просто покупают за 20 XP и активируют"
     },
     {
@@ -684,6 +690,7 @@
       "charges": 0,
       "max": 0,
       "rate": 0,
+      "requires": ["item:ravnovesie_zla_i_dobra"],
       "note": "покупается за 20 XP в разделе накопителей; включается в плане"
     }
   ],
@@ -692,32 +699,37 @@
       "key": "folio:metod_neproglyadnogo_tumana",
       "name": "метод Непроглядного Тумана",
       "take": false,
-      "cost": "50 XP"
+      "cost": "50 XP",
+      "requires": ["lesson:metod_neproglyadnogo_tumana", "folio:vykupit_tuman"]
     },
     {
       "key": "folio:metod_yadovityh_miazmov",
       "name": "метод Ядовитых Миазмов",
       "take": false,
-      "cost": "50 XP"
+      "cost": "50 XP",
+      "requires": ["lesson:metod_yadovityh_miazmov", "folio:vykupit_miazmy"]
     },
     {
       "key": "folio:metod_tonkogo_pogloscheniya",
       "name": "метод Утончённого Поглощения Чистой Инь",
       "take": false,
-      "cost": "40 XP"
+      "cost": "40 XP",
+      "requires": ["lesson:metod_tonkogo_pogloscheniya", "folio:vykupit_in"]
     },
     {
       "key": "folio:metod_ognennogo_vodopada",
       "name": "метод Огненного Водопада",
       "take": false,
-      "cost": "5 XP"
+      "cost": "5 XP",
+      "requires": ["lesson:metod_ognennogo_vodopada", "folio:vykupit_vodopad"]
     },
     {
       "key": "folio:metod_ognennogo_dozhdya",
       "name": "метод Огненного Дождя (отложен)",
       "take": false,
       "cost": "20 XP",
-      "note": "ждёт невыученными уроками"
+      "note": "ждёт невыученными уроками",
+      "requires": ["lesson:metod_ognennogo_dozhdya", "folio:vykupit_dozhd"]
     }
   ]
 }

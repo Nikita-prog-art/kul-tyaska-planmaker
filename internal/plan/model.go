@@ -120,6 +120,9 @@ type Accumulator struct {
 	Max      float64 `json:"max"`
 	Rate     float64 `json:"rate"` // % за жизнь
 	Note     string  `json:"note,omitempty"`
+	// Requires — покупки, без которых накопитель не активировать:
+	// «хардкор» и «равновесие зла и добра» сначала надо купить в магазине.
+	Requires []string `json:"requires,omitempty"`
 }
 
 // Folio — фолиант в библиотеке.
@@ -130,6 +133,9 @@ type Folio struct {
 	Deferred bool   `json:"deferred"` // отложен невыученными уроками
 	Cost     string `json:"cost,omitempty"`
 	Note     string `json:"note,omitempty"`
+	// Requires — что нужно сделать, чтобы фолиант можно было взять с собой:
+	// сначала урок метода, потом выкуп (сам выбор бесплатный).
+	Requires []string `json:"requires,omitempty"`
 }
 
 // LadderCost описывает цену шага шкалы.
@@ -283,7 +289,21 @@ func (p *Plan) Normalize() {
 			pk.Qty = it.Repeat
 		}
 	}
+	// Ссылки в requires — только на существующие покупки: битый ключ (каркас
+	// правили руками) запер бы накопитель или фолиант навсегда.
+	for i := range p.Shop {
+		p.Shop[i].Requires = p.liveKeys(p.Shop[i].Requires)
+	}
+	for i := range p.Accumulators {
+		p.Accumulators[i].Requires = p.liveKeys(p.Accumulators[i].Requires)
+	}
+	for i := range p.Folios {
+		p.Folios[i].Requires = p.liveKeys(p.Folios[i].Requires)
+	}
 	p.enforceLocked()
+	// Отметки «активирую» и «беру» план обязан заслужить: накопитель —
+	// зарядом, фолиант — уроком метода и выкупом.
+	p.pruneAttachments()
 }
 
 // enforceLocked доставляет в план позиции, которые он обязан содержать

@@ -86,6 +86,50 @@ test('фиксированная цена не съедает номер уро�
   assert.deepStrictEqual(numbered, [1, 2, 3, 4, 5, 6, 7, 8]);
 });
 
+test('накопитель активируется, только если заряжен или куплен', () => {
+  const byName = (n) => plan.accumulators.filter((a) => a.name.indexOf(n) >= 0)[0];
+  // «горожане»: 0,8 заряда + 20% за прожитую жизнь — полный.
+  assert.strictEqual(KT.accumulatorState(plan, byName('горожане')).ready, true);
+  const mu = KT.accumulatorState(plan, byName('окрестности'));
+  assert.strictEqual(mu.ready, false);
+  assert.ok(mu.reason.indexOf('0,04 из 1') >= 0, 'видно, сколько заряда не хватает: ' + mu.reason);
+  // «хардкор» куплен в плане — можно; «равновесие» не куплено — нельзя.
+  assert.strictEqual(KT.accumulatorState(plan, byName('хардкор')).ready, true);
+  const ravno = KT.accumulatorState(plan, byName('равновесие'));
+  assert.strictEqual(ravno.ready, false);
+  assert.ok(ravno.reason.indexOf('сначала купи') >= 0, 'сказано, что сначала купить');
+});
+
+test('фолиант берут после урока метода и выкупа, и это бесплатно', () => {
+  const folio = plan.folios[0];
+  assert.strictEqual(KT.folioState(plan, folio).ready, true, 'в эталонном плане фолиант выкуплен');
+
+  // Убираем урок метода и выкуп — фолиант запирается.
+  const bare = JSON.parse(JSON.stringify(plan));
+  bare.picks = bare.picks.filter((p) => p.key !== 'lesson:metod_neproglyadnogo_tumana' && p.key !== 'folio:vykupit_tuman');
+  const st = KT.folioState(bare, bare.folios[0]);
+  assert.strictEqual(st.ready, false);
+  assert.ok(st.reason.indexOf('сначала урок') >= 0 && st.reason.indexOf('нужен выкуп') >= 0, st.reason);
+
+  // Незаслуженные отметки движок снимает, а план от выбора фолианта не дорожает.
+  const before = KT.computeSummary(bare, sections).total;
+  bare.folios[0].take = true;
+  bare.accumulators.forEach((a) => { a.activate = true; });
+  assert.ok(KT.pruneAttachments(bare) > 0, 'сняты незаслуженные отметки');
+  assert.strictEqual(bare.folios[0].take, false);
+  const left = bare.accumulators.filter((a) => a.activate).map((a) => a.name).sort();
+  assert.deepStrictEqual(left, ['горожане', 'хардкор'], 'остались только заряженный и купленный');
+  assert.strictEqual(KT.computeSummary(bare, sections).total, before, 'отметки фолиантов денег не стоят');
+});
+
+test('выкуп без урока метода — это ошибка в плане', () => {
+  const p = JSON.parse(JSON.stringify(plan));
+  p.picks = p.picks.filter((x) => x.key !== 'lesson:metod_neproglyadnogo_tumana');
+  const warnings = KT.computeSummary(p, sections).warnings.join('\n');
+  assert.ok(warnings.indexOf('выкупить метод Непроглядного Тумана') >= 0, 'назван сам выкуп: ' + warnings);
+  assert.ok(warnings.indexOf('взят без') >= 0, 'сказано, что он взят без урока: ' + warnings);
+});
+
 if (failures) {
   console.error('\nПровалено проверок: ' + failures);
   process.exit(1);

@@ -1,5 +1,5 @@
 {
-  "id": "e7cf7833e77fb22167b08bff",
+  "id": "09bc55bce9714824c88d51b5",
   "user_id": "user-1",
   "title": "План «всё влезет»",
   "emoji": "🔥",
@@ -579,6 +579,9 @@
       "fixed": true,
       "min_lesson": 1,
       "once": false,
+      "requires": [
+        "lesson:metod_neproglyadnogo_tumana"
+      ],
       "desc": "Выкуп фолианта необычного качества (метод Непроглядного Тумана). Выкуп не заменяет урок: урок берётся отдельно по общей цене."
     },
     {
@@ -590,6 +593,9 @@
       "fixed": true,
       "min_lesson": 1,
       "once": false,
+      "requires": [
+        "lesson:metod_yadovityh_miazmov"
+      ],
       "desc": "Выкуп трофейного фолианта (метод Ядовитых Миазмов, Испускаемых Одинокой Пальмой). Сам урок-трофей бесплатен."
     },
     {
@@ -601,6 +607,9 @@
       "fixed": true,
       "min_lesson": 1,
       "once": false,
+      "requires": [
+        "lesson:metod_tonkogo_pogloscheniya"
+      ],
       "desc": "Выкуп трофейного фолианта (метод Утончённого Поглощения Чистой Инь). Сам урок-трофей бесплатен."
     },
     {
@@ -612,6 +621,9 @@
       "fixed": true,
       "min_lesson": 1,
       "once": false,
+      "requires": [
+        "lesson:metod_ognennogo_vodopada"
+      ],
       "desc": "Выкуп фолианта плохого качества (метод Огненного Водопада). Выкуп не заменяет урок."
     },
     {
@@ -623,6 +635,9 @@
       "fixed": true,
       "min_lesson": 1,
       "once": false,
+      "requires": [
+        "lesson:metod_ognennogo_dozhdya"
+      ],
       "desc": "Выкуп фолианта обычного качества (метод Огненного Дождя). Выкуп не заменяет урок."
     },
     {
@@ -703,6 +718,10 @@
       "qty": 1
     },
     {
+      "key": "folio:vykupit_tuman",
+      "qty": 1
+    },
+    {
       "key": "item:pererozhdenie_dzhona",
       "qty": 1
     }
@@ -752,7 +771,10 @@
       "charges": 0,
       "max": 1,
       "rate": 0,
-      "note": "механика зарядов в тексте посмертия не расписана; в планах его просто покупают за 20 XP и активируют"
+      "note": "механика зарядов в тексте посмертия не расписана; в планах его просто покупают за 20 XP и активируют",
+      "requires": [
+        "item:hardkor"
+      ]
     },
     {
       "key": "acc:ravnovesie",
@@ -761,7 +783,10 @@
       "charges": 0,
       "max": 1,
       "rate": 0,
-      "note": "покупается за 20 XP в разделе накопителей; включается в плане"
+      "note": "покупается за 20 XP в разделе накопителей; включается в плане",
+      "requires": [
+        "item:ravnovesie_zla_i_dobra"
+      ]
     }
   ],
   "folios": [
@@ -770,7 +795,56 @@
       "name": "метод Непроглядного Тумана",
       "take": true,
       "deferred": false,
-      "cost": "50 XP"
+      "cost": "50 XP",
+      "requires": [
+        "lesson:metod_neproglyadnogo_tumana",
+        "folio:vykupit_tuman"
+      ]
+    },
+    {
+      "key": "folio:metod_yadovityh_miazmov",
+      "name": "метод Ядовитых Миазмов",
+      "take": false,
+      "deferred": false,
+      "cost": "50 XP",
+      "requires": [
+        "lesson:metod_yadovityh_miazmov",
+        "folio:vykupit_miazmy"
+      ]
+    },
+    {
+      "key": "folio:metod_tonkogo_pogloscheniya",
+      "name": "метод Утончённого Поглощения Чистой Инь",
+      "take": false,
+      "deferred": false,
+      "cost": "40 XP",
+      "requires": [
+        "lesson:metod_tonkogo_pogloscheniya",
+        "folio:vykupit_in"
+      ]
+    },
+    {
+      "key": "folio:metod_ognennogo_vodopada",
+      "name": "метод Огненного Водопада",
+      "take": false,
+      "deferred": false,
+      "cost": "5 XP",
+      "requires": [
+        "lesson:metod_ognennogo_vodopada",
+        "folio:vykupit_vodopad"
+      ]
+    },
+    {
+      "key": "folio:metod_ognennogo_dozhdya",
+      "name": "метод Огненного Дождя (отложен)",
+      "take": false,
+      "deferred": false,
+      "cost": "20 XP",
+      "note": "ждёт невыученными уроками",
+      "requires": [
+        "lesson:metod_ognennogo_dozhdya",
+        "folio:vykupit_dozhd"
+      ]
     }
   ],
   "ladders": [

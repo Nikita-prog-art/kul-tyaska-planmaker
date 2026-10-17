@@ -48,11 +48,13 @@ func fixturePlan(t *testing.T) *plan.Plan {
 		{Key: "item:ponaslyshke_mech", Qty: 1},
 		{Key: "item:hardkor", Qty: 1},
 		{Key: "folio:vzyat_1_foliant", Qty: 1},
+		{Key: "folio:vykupit_tuman", Qty: 1},
 		{Key: "item:pererozhdenie_dzhona", Qty: 1},
 	}
 	p.Deferred = []plan.Deferred{{Key: "lesson:metod_ognennogo_vodopada", Slot: 1}}
 	p.NotTaken = []string{"lesson:povyshenie_chistoty_korney", "lesson:nenavizhu_yady"}
-	p.Folios = []plan.Folio{{Key: "folio:metod_neproglyadnogo_tumana", Name: "метод Непроглядного Тумана", Take: true, Cost: "50 XP"}}
+	// Фолианты берём из каркаса: у них уже есть ключи и условия (урок + выкуп).
+	p.Folios[0].Take = true
 	for i := range p.Accumulators {
 		if p.Accumulators[i].Name == "горожане" || p.Accumulators[i].Name == "хардкор" {
 			p.Accumulators[i].Activate = true
@@ -781,5 +783,114 @@ func TestPlansFromPlayers(t *testing.T) {
 					c.comment, got.Remainder, c.want, got.Total)
 			}
 		})
+	}
+}
+
+// presetSkeleton читает каркас жизни 8 для тестов.
+func presetSkeleton(t *testing.T) *plan.Skeleton {
+	t.Helper()
+	raw, err := os.ReadFile(presetPath)
+	if err != nil {
+		t.Fatalf("каркас: %v", err)
+	}
+	sk, err := plan.ParseSkeleton(raw)
+	if err != nil {
+		t.Fatalf("разбор каркаса: %v", err)
+	}
+	return sk
+}
+
+// TestAttachmentGate — отметки «активирую» и «беру» план обязан заслужить:
+// накопитель — зарядом (или покупкой), фолиант — уроком метода и выкупом.
+func TestAttachmentGate(t *testing.T) {
+	sk := presetSkeleton(t)
+	p := sk.NewPlan("u", "проверка отметок", "")
+
+	// В свежем плане доступен только полностью заряженный накопитель.
+	ready := map[string]bool{"горожане": true}
+	for i := range p.Accumulators {
+		a := &p.Accumulators[i]
+		st := p.AccumulatorState(a)
+		if st.Ready != ready[a.Name] {
+			t.Errorf("накопитель %q: доступен=%v (%s), ждал %v", a.Name, st.Ready, st.Reason, ready[a.Name])
+		}
+		if !st.Ready && st.Reason == "" {
+			t.Errorf("накопитель %q недоступен без объяснения", a.Name)
+		}
+	}
+
+	// Фолиант без урока метода и выкупа взять нельзя, и в подсказке есть оба.
+	f := p.Folios[0]
+	if st := p.FolioState(&f); st.Ready || !strings.Contains(st.Reason, "урок") || !strings.Contains(st.Reason, "выкуп") {
+		t.Errorf("фолиант без урока и выкупа: %+v", st)
+	}
+
+	// Незаслуженные отметки Normalize снимает: сохранённый план сходится сам с собой.
+	for i := range p.Accumulators {
+		p.Accumulators[i].Activate = true
+	}
+	p.Folios[0].Take = true
+	p.Normalize()
+	for i := range p.Accumulators {
+		a := &p.Accumulators[i]
+		if a.Activate != ready[a.Name] {
+			t.Errorf("после Normalize накопитель %q: активирую=%v", a.Name, a.Activate)
+		}
+	}
+	if p.Folios[0].Take {
+		t.Error("после Normalize невыкупленный фолиант остался отмеченным")
+	}
+
+	// Урок метода, выкуп и покупка накопителя открывают отметки.
+	p.Picks = append(p.Picks,
+		plan.Pick{Key: "lesson:metod_neproglyadnogo_tumana"},
+		plan.Pick{Key: "folio:vykupit_tuman"},
+		plan.Pick{Key: "item:hardkor"},
+	)
+	p.Normalize()
+	if st := p.FolioState(&p.Folios[0]); !st.Ready {
+		t.Errorf("фолиант с уроком и выкупом недоступен: %s", st.Reason)
+	}
+	for i := range p.Accumulators {
+		a := &p.Accumulators[i]
+		if a.Name == "хардкор" {
+			if st := p.AccumulatorState(a); !st.Ready {
+				t.Errorf("купленный хардкор недоступен: %s", st.Reason)
+			}
+		}
+	}
+
+	// Выкуп без урока метода — ошибка в плане, о ней надо сказать.
+	p.Picks = []plan.Pick{{Key: "lesson:poceluy_melisandry"}, {Key: "folio:vykupit_tuman"}}
+	sum := plan.Compute(p)
+	found := false
+	for _, w := range sum.Warnings {
+		if strings.Contains(w, "выкупить метод Непроглядного Тумана") && strings.Contains(w, "взят без") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("ждал предупреждение про выкуп без урока, получил %v", sum.Warnings)
+	}
+}
+
+// TestSkeletonDropsBrokenRequires — битая ссылка в requires не должна
+// навсегда запирать накопитель или фолиант.
+func TestSkeletonDropsBrokenRequires(t *testing.T) {
+	raw := []byte(`{"name":"тест","balance":10,"shop":[{"key":"item:a","kind":"item","section":"other","title":"а","requires":["item:нет"]}],
+		"accumulators":[{"name":"накопитель","requires":["item:нет","item:a"]}],
+		"folios":[{"name":"фолиант","requires":["item:нет"]}]}`)
+	sk, err := plan.ParseSkeleton(raw)
+	if err != nil {
+		t.Fatalf("каркас не разобрался: %v", err)
+	}
+	if len(sk.Shop[0].Requires) != 0 {
+		t.Errorf("битая ссылка осталась у покупки: %v", sk.Shop[0].Requires)
+	}
+	if len(sk.Accumulators[0].Requires) != 1 || sk.Accumulators[0].Requires[0] != "item:a" {
+		t.Errorf("у накопителя должны остаться только живые ссылки: %v", sk.Accumulators[0].Requires)
+	}
+	if len(sk.Folios[0].Requires) != 0 {
+		t.Errorf("битая ссылка осталась у фолианта: %v", sk.Folios[0].Requires)
 	}
 }

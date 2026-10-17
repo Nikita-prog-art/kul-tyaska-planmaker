@@ -105,6 +105,18 @@ func Compute(p *Plan) *Summary {
 				fmt.Sprintf("обязательная позиция «%s» не взята%s", it.Title, lockSuffix(&it)))
 		}
 	}
+	// Покупка с условием: «выкупить метод» без самого урока метода — деньги
+	// на ветер, о таком лучше сказать сразу.
+	for i := range p.Shop {
+		it := &p.Shop[i]
+		if !p.Picked(it.Key) {
+			continue
+		}
+		for _, k := range p.missingPrereqs(it.Requires) {
+			warnings = append(warnings,
+				fmt.Sprintf("«%s» взят без «%s»", displayTitle(it), itemTitle(p, k)))
+		}
+	}
 	for _, req := range p.Requirements {
 		missed := missingRequirementKeys(p, req)
 		if req.Soft {
