@@ -323,7 +323,7 @@ textarea { resize: vertical; line-height: 1.5; }
 
 .row.item, .row.ladder {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 84px auto auto;
+  grid-template-columns: 34px minmax(0, 1fr) 84px auto auto auto;
   gap: 10px;
   align-items: center;
   padding: 9px 8px;
@@ -407,6 +407,13 @@ input.num.ladder-owned {
 .item-cost { text-align: right; font-family: var(--mono); color: var(--gold); font-size: 14px; }
 .item-state { display: flex; gap: 6px; }
 .item-order { display: flex; gap: 4px; }
+.item-qty { display: flex; align-items: center; gap: 4px; }
+.item-qty .qty-value { font-family: var(--mono); font-size: 13px; color: var(--gold); min-width: 26px; text-align: center; }
+
+/* Накопители и фолианты: отметки, которых нет в магазине. */
+.attach-list { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.attach { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+.attach input { accent-color: var(--jade); }
 .ladder-main { display: flex; flex-direction: column; }
 .ladder-ctl { display: flex; align-items: center; gap: 6px; }
 .ladder-ctl input { width: 74px; text-align: center; font-family: var(--mono); }
@@ -473,6 +480,6 @@ input.num.ladder-owned {
   .sidebar { position: static; flex-direction: row; flex-wrap: wrap; }
   .sidebar .card { flex: 1 1 260px; }
   .row.item { grid-template-columns: 30px minmax(0, 1fr) 70px; grid-template-areas: "badge main cost" ". state state" ". order order"; }
-  .row.item .item-state, .row.item .item-order { grid-column: 2 / -1; }
+  .row.item .item-state, .row.item .item-order, .row.item .item-qty { grid-column: 2 / -1; }
   .plan-item { grid-template-columns: 1fr; }
 }

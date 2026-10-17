@@ -108,7 +108,9 @@ test('секции и строки магазина отрисованы', () =>
   assert.ok(rowByTitle('пинг систем'), 'урок из каркаса виден');
   const talent = document.querySelector('.row.ladder[data-ladder="talent.die"]');
   assert.ok(talent && talent.textContent.indexOf('кость таланта') >= 0, 'шкала таланта видна');
-  assert.ok(document.querySelectorAll('.ladder').length >= 8, 'все шкалы на месте');
+  // Скрытые шкалы (например, «один на миллион» из прошлых жизней) не рисуются.
+  const visibleLadders = plan.ladders.filter((l) => !l.hidden).length;
+  assert.strictEqual(document.querySelectorAll('.ladder').length, visibleLadders, 'все видимые шкалы на месте');
 });
 
 test('стартовые суммы совпадают с расчётом движка', () => {
@@ -392,6 +394,87 @@ function rowByTitleIn(doc, title) {
   }
   return null;
 }
+
+// --- порядок уроков, количество покупок, отметки накопителей -------------
+
+/* lessonTitles — названия уроков в том порядке, в каком они стоят в DOM. */
+function lessonTitles(doc) {
+  return Array.prototype.filter.call(doc.querySelectorAll('#sec-lessons .row.item'), (r) => {
+    const b = r.querySelector('.badge');
+    return b && b.textContent !== '';
+  }).map((r) => r.querySelector('.item-title').textContent.replace(/\s+/g, ' ').trim());
+}
+
+/* titleIndex — где в списке стоит строка, содержащая подстроку. */
+function titleIndex(titles, needle) {
+  for (let i = 0; i < titles.length; i++) if (titles[i].indexOf(needle) >= 0) return i;
+  return -1;
+}
+
+test('порядок строк в уроках повторяет очередь покупок', () => {
+  const d = bootPage(plan).document;
+  const titles = lessonTitles(d);
+  assert.ok(titles.length >= 5, 'уроки отрисованы');
+  assert.ok(titles[0].indexOf('поцелуй') === 0, 'первым стоит уже купленный ею урок');
+
+  const badges = Array.prototype.map.call(
+    d.querySelectorAll('#sec-lessons .row.item .badge'),
+    (b) => b.textContent
+  ).filter((v) => v !== '').map(Number);
+  assert.deepStrictEqual(badges, badges.slice().sort((a, b) => a - b), 'номера идут сверху вниз');
+
+  // «выше» у подвижного урока переставляет саму строку, а не только число.
+  const before = titleIndex(lessonTitles(d), 'пинг систем');
+  assert.ok(before > 1, 'пинг систем стоит не первым');
+  rowByTitleIn(d, 'пинг систем').querySelectorAll('.item-order .btn')[0].click();
+  const after = titleIndex(lessonTitles(d), 'пинг систем');
+  assert.strictEqual(after, before - 1, 'строка переехала на место выше');
+
+  // Уже взятый ею урок с места не двигается: он остаётся первым.
+  assert.ok(lessonTitles(d)[0].indexOf('поцелуй') === 0, 'поцелуй Мелисандры остался первым');
+});
+
+test('повторяемую покупку можно взять дважды', () => {
+  const w = bootPage(JSON.parse(JSON.stringify(plan)));
+  const d = w.document;
+  const row = rowByTitleIn(d, 'лестница в небо');
+  assert.strictEqual(row.querySelector('.qty-value').textContent, '×1');
+  assert.strictEqual(d.querySelectorAll('[data-qty="item:lestnica_v_nebo"]').length, 1, 'счётчик количества на месте');
+
+  const spent = Number(d.getElementById('sum-spent').textContent.replace(',', '.'));
+  row.querySelectorAll('.item-qty .btn')[1].click(); // «+»
+  const after = rowByTitleIn(d, 'лестница в небо');
+  assert.strictEqual(after.querySelector('.qty-value').textContent, '×2', 'вторая покупка отмечена');
+  const spent2 = Number(d.getElementById('sum-spent').textContent.replace(',', '.'));
+  assert.strictEqual(spent2 - spent, 5, 'вторая лестница стоит ещё 5 XP');
+
+  Array.prototype.find.call(d.querySelectorAll('.btn'), (b) => b.textContent === 'Сохранить').click();
+  const saved = JSON.parse(w.__submitted);
+  const pick = saved.picks.filter((p) => p.key === 'item:lestnica_v_nebo')[0];
+  assert.strictEqual(pick.qty, 2, 'количество уезжает в сохранение');
+
+  // Третьей покупки не бывает: у позиции предел 2.
+  rowByTitleIn(d, 'лестница в небо').querySelectorAll('.item-qty .btn')[1].click();
+  assert.strictEqual(rowByTitleIn(d, 'лестница в небо').querySelector('.qty-value').textContent, '×2');
+});
+
+test('накопители и фолианты отмечаются отдельно от магазина', () => {
+  const d = bootPage(JSON.parse(JSON.stringify(plan))).document;
+  const card = d.querySelector('#kt-attach');
+  assert.ok(card, 'панель отметок отрисована');
+
+  const find = (re) => Array.prototype.find.call(card.querySelectorAll('.attach'), (l) => re.test(l.textContent));
+  assert.strictEqual(find(/хардкор/).querySelector('input').checked, true, 'купленный накопитель уже отмечен к активации');
+  assert.strictEqual(find(/равновесие/).querySelector('input').checked, false, 'некупленный — не отмечен');
+
+  // Фолиант, который берут с собой, отмечается вручную и виден в выгрузке.
+  const tuman = find(/Непроглядного Тумана/);
+  assert.strictEqual(tuman.querySelector('input').checked, true, 'фолиант отмечен к переносу');
+  tuman.querySelector('input').click();
+  const txt = d.getElementById('kt-export-text').value;
+  assert.ok(!/беру с собой:[^\n]*Непроглядного/.test(txt), 'ушёл из «беру с собой»');
+  assert.ok(/оставляю в библиотеке:[^\n]*Непроглядного/.test(txt), 'попал в «оставляю в библиотеке»');
+});
 
 if (failures) {
   console.error('\nПровалено проверок: ' + failures);

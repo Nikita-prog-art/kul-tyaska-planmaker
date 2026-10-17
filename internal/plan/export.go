@@ -24,17 +24,21 @@ func Render(p *Plan, s *Summary) string {
 	for _, sec := range s.Sections {
 		fmt.Fprintf(&b, "%s:\n", sec.Title)
 		for _, l := range sec.Lines {
+			title := l.Title
+			if l.Qty > 1 {
+				title = fmt.Sprintf("%s ×%d", title, l.Qty)
+			}
 			switch {
 			case l.Deferred:
 				note := l.Note
 				if note == "" {
 					note = "невыученный, в следующую жизнь"
 				}
-				fmt.Fprintf(&b, "  - %s (%s)\n", l.Title, note)
+				fmt.Fprintf(&b, "  - %s (%s)\n", title, note)
 			case l.Number > 0:
-				fmt.Fprintf(&b, "  %d. %s: %s%s\n", l.Number, l.Title, money(p, l.Cost), noteSuffix(l.Note))
+				fmt.Fprintf(&b, "  %d. %s: %s%s\n", l.Number, title, money(p, l.Cost), noteSuffix(l.Note))
 			default:
-				fmt.Fprintf(&b, "  - %s: %s%s\n", l.Title, money(p, l.Cost), noteSuffix(l.Note))
+				fmt.Fprintf(&b, "  - %s: %s%s\n", title, money(p, l.Cost), noteSuffix(l.Note))
 			}
 		}
 		fmt.Fprintf(&b, "  Сумма: %s, ост. %s\n\n", money(p, sec.Sum), money(p, sec.Remainder))
@@ -43,7 +47,11 @@ func Render(p *Plan, s *Summary) string {
 	// Накопители и фолианты — отдельными строками, как требует формат.
 	var act, skip []string
 	for _, a := range p.Accumulators {
-		line := fmt.Sprintf("%s (%s/%s, +%s%% за жизнь)", a.Name, num(p, a.Charges), num(p, a.Max), num(p, a.Rate))
+		line := a.Name
+		// Если про заряды накопителя в тексте ничего нет, печатаем только имя.
+		if a.Charges != 0 || a.Rate != 0 {
+			line = fmt.Sprintf("%s (%s/%s, +%s%% за жизнь)", a.Name, num(p, a.Charges), num(p, a.Max), num(p, a.Rate))
+		}
 		if a.Activate {
 			act = append(act, line)
 		} else {
@@ -51,7 +59,7 @@ func Render(p *Plan, s *Summary) string {
 		}
 	}
 	if len(act) > 0 || len(skip) > 0 {
-		b.WriteString("Накопители:\n")
+		b.WriteString("Активация накопителей:\n")
 		if len(act) > 0 {
 			fmt.Fprintf(&b, "  - активирую: %s\n", strings.Join(act, "; "))
 		}

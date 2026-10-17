@@ -81,7 +81,9 @@ test('фиксированная цена не съедает номер уро�
   const summary = KT.computeSummary(plan, sections);
   const lessons = summary.sections.filter((s) => s.key === 'lessons')[0];
   const numbered = lessons.lines.filter((l) => l.number > 0).map((l) => l.number);
-  assert.deepStrictEqual(numbered, [1, 2, 3, 4, 5, 6, 7]);
+  // Номера идут подряд: урок-трофей за 0 XP («метод Ядовитых Миазмов»)
+  // и фиксированная «Дева-в-Беде» номер не занимают.
+  assert.deepStrictEqual(numbered, [1, 2, 3, 4, 5, 6, 7, 8]);
 });
 
 if (failures) {

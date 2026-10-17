@@ -46,9 +46,12 @@ type ShopItem struct {
 	Requires  []string `json:"requires,omitempty"`
 	Excludes  []string `json:"excludes,omitempty"`
 	NoDefer   bool     `json:"no_defer,omitempty"` // «нельзя применить невыученные уроки»
-	Desc      string   `json:"desc,omitempty"`
-	Tags      []string `json:"tags,omitempty"`
-	Price     string   `json:"price,omitempty"` // цена как в тексте: «5 XP», «трофей, 0 XP»
+	// Repeat — сколько раз позицию можно взять в одном плане (0 или 1 — один раз):
+	// «взять 1 фолиант (максимум 3)», «лестница в небо — можно купить дважды».
+	Repeat int      `json:"repeat,omitempty"`
+	Desc   string   `json:"desc,omitempty"`
+	Tags   []string `json:"tags,omitempty"`
+	Price  string   `json:"price,omitempty"` // цена как в тексте: «5 XP», «трофей, 0 XP»
 
 	// Locked — позиция, которую план не может не содержать: Ли Лун уже взяла её
 	// сама или не станет рассматривать план без неё. В конструкторе такие
@@ -268,6 +271,16 @@ func (p *Plan) Normalize() {
 		}
 		if l.Title == "" {
 			l.Title = l.Key
+		}
+	}
+	// Количество покупок не выходит за разрешённый повтор.
+	for i := range p.Picks {
+		pk := &p.Picks[i]
+		if pk.Qty < 1 {
+			pk.Qty = 1
+		}
+		if it := p.Item(pk.Key); it != nil && it.Repeat > 1 && pk.Qty > it.Repeat {
+			pk.Qty = it.Repeat
 		}
 	}
 	p.enforceLocked()

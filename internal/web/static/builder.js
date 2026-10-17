@@ -164,18 +164,26 @@
     plan.deferred.forEach(function (d, i) { d.slot = i + 1; });
   }
 
-  /* syncLegacySections — фолианты и накопители держим в согласии с магазином. */
+  /* syncLegacySections — держим разделы плана в согласии с магазином. */
   function syncLegacySections(key) {
     var it = item(key);
     if (!it) return;
-    if (it.section === 'folio') {
-      var has = plan.folios.some(function (f) { return f.key === key; });
-      if (isPicked(key) && !has) {
-        plan.folios.push({ key: key, name: it.title, take: true, cost: it.price || '' });
-      } else if (!isPicked(key) && has) {
-        plan.folios = plan.folios.filter(function (f) { return f.key !== key; });
-      }
-    }
+    // Накопитель «хардкор» и «равновесие» покупаются в магазине, а отмечаются
+    // к активации в списке накопителей — здесь следим, чтобы список знал про
+    // купленный накопитель и не потерял его при сохранении.
+    if (it.section !== 'accumulators' || !isPicked(key)) return;
+    var name = accumulatorName(it.title);
+    var found = null;
+    plan.accumulators.forEach(function (a) {
+      if (a.key === key || a.name === name) found = a;
+    });
+    if (found) { found.activate = true; return; }
+    plan.accumulators.push({ key: key, name: name, activate: true, charges: 0, max: 0, rate: 0 });
+  }
+
+  /* accumulatorName убирает из названия покупки слово «накопитель». */
+  function accumulatorName(title) {
+    return String(title || '').replace(/^накопитель\s+/i, '').replace(/[«»]/g, '');
   }
 
   // --- каркас -----------------------------------------------------------
@@ -355,9 +363,50 @@
       ]),
       h('div', { class: 'card', id: 'kt-rewards', hidden: true }),
       h('div', { class: 'card', id: 'kt-req' }),
+      renderAttachments(),
       h('div', { class: 'card', id: 'kt-warnings' }),
       h('nav', { class: 'card sec-nav', id: 'kt-nav' })
     ]);
+  }
+
+  /* renderAttachments — какие накопители активируем и какие фолианты берём:
+     в плане это отдельные строки, которых в магазине нет. */
+  function renderAttachments() {
+    var accs = plan.accumulators || [];
+    var folios = plan.folios || [];
+    if (!accs.length && !folios.length) return null;
+    var body = [
+      h('h3', { text: 'Накопители и фолианты' }),
+      h('div', { class: 'muted small', text: 'Отметь, что активируешь и какие фолианты берёшь с собой.' })
+    ];
+    if (accs.length) {
+      body.push(h('div', { class: 'attach-list' }, accs.map(function (a) {
+        return h('label', { class: 'attach' }, [
+          h('input', {
+            type: 'checkbox', checked: !!a.activate,
+            onchange: function (e) { a.activate = e.target.checked; markDirty(); recompute(); }
+          }),
+          h('span', {
+            // Заряды печатаем, только если они вообще известны из текста.
+            text: a.name + (Number(a.charges) || Number(a.rate)
+              ? ' (' + KT.number(a.charges) + '/' + KT.number(a.max) + ', +' + KT.number(a.rate) + '% за жизнь)'
+              : '')
+          })
+        ]);
+      })));
+    }
+    if (folios.length) {
+      body.push(h('div', { class: 'attach-list' }, folios.map(function (f) {
+        return h('label', { class: 'attach' }, [
+          h('input', {
+            type: 'checkbox', checked: !!f.take,
+            onchange: function (e) { f.take = e.target.checked; markDirty(); recompute(); }
+          }),
+          h('span', { text: f.name + (f.cost ? ' — ' + f.cost : '') })
+        ]);
+      })));
+    }
+    return h('div', { class: 'card', id: 'kt-attach' }, body);
   }
 
   /* renderRewards показывает награды за порядок, которые план уже получает. */
@@ -434,13 +483,36 @@
 
     var out = [];
     order.forEach(function (sec) {
-      var items = groups[sec.key] || [];
+      var items = orderedItems(sec.key, groups[sec.key] || []);
       var lads = ladders[sec.key] || [];
       if (!items.length && !lads.length && sec.key !== 'lessons') return;
       out.push(renderSection(sec, items, lads));
     });
     // Позиции из неизвестных секций — в «прочее».
     return out;
+  }
+
+  /* orderedItems расставляет строки секции уроков в порядке покупки: сверху то,
+     что берётся раньше. Так перестановка уроков видна глазами, а не только в
+     номерах. Отложенные (невыученные) идут следом, остальное — как в магазине. */
+  function orderedItems(secKey, items) {
+    if (secKey !== 'lessons') return items;
+    var rank = {}, drank = {};
+    plan.picks.forEach(function (pk, i) {
+      if (rank[pk.key] === undefined) rank[pk.key] = i;
+    });
+    (plan.deferred || []).forEach(function (d, i) {
+      if (drank[d.key] === undefined) drank[d.key] = i;
+    });
+    var picked = [], deferred = [], rest = [];
+    items.forEach(function (it) {
+      if (rank[it.key] !== undefined) picked.push(it);
+      else if (drank[it.key] !== undefined) deferred.push(it);
+      else rest.push(it);
+    });
+    picked.sort(function (a, b) { return rank[a.key] - rank[b.key]; });
+    deferred.sort(function (a, b) { return drank[a.key] - drank[b.key]; });
+    return picked.concat(deferred, rest);
   }
 
   function renderSection(sec, items, ladders) {
@@ -622,9 +694,54 @@
       it.kind === 'lesson' && !it.already_paid ? h('div', { class: 'item-order' }, [
         h('button', { class: 'btn tiny', type: 'button', text: '↑', title: 'выше в очереди уроков', onclick: function () { movePick(it.key, -1); } }),
         h('button', { class: 'btn tiny', type: 'button', text: '↓', title: 'ниже в очереди уроков', onclick: function () { movePick(it.key, 1); } })
+      ]) : null,
+      // Позиции, которые можно взять несколько раз (фолианты, лестница в небо):
+      // количество задаётся здесь, цену считает движок.
+      it.repeat > 1 ? h('div', { class: 'item-qty' }, [
+        h('button', {
+          class: 'btn tiny', type: 'button', text: '−', title: 'взять на одну меньше',
+          onclick: function () { setQty(it.key, -1); }
+        }),
+        h('span', {
+          class: 'qty-value', dataset: { qty: it.key },
+          text: '×' + (pickQty(it.key) || 0)
+        }),
+        h('button', {
+          class: 'btn tiny', type: 'button', text: '+', title: 'взять ещё одну (всего до ' + it.repeat + ')',
+          onclick: function () { setQty(it.key, 1); }
+        })
       ]) : null
     ]);
     return row;
+  }
+
+  /* pickQty — сколько раз позиция взята (0, если её нет в плане). */
+  function pickQty(key) {
+    for (var i = 0; i < plan.picks.length; i++) {
+      if (plan.picks[i].key === key) return plan.picks[i].qty > 0 ? plan.picks[i].qty : 1;
+    }
+    return 0;
+  }
+
+  /* setQty меняет количество покупок повторяемой позиции. */
+  function setQty(key, dir) {
+    var it = item(key);
+    if (!it || !(it.repeat > 1)) return;
+    var idx = pickIndex(key);
+    if (idx < 0) { // ещё не взято: «+» сразу берёт первую штуку
+      if (dir < 0) return;
+      setPick(key, true);
+      markDirty();
+      render();
+      return;
+    }
+    var cur = plan.picks[idx].qty > 0 ? plan.picks[idx].qty : 1;
+    var next = cur + dir;
+    if (next < 1) { setPick(key, false); markDirty(); render(); return; }
+    if (next > it.repeat) return;
+    plan.picks[idx].qty = next;
+    markDirty();
+    render();
   }
 
   function setState(key, state) {
@@ -786,6 +903,8 @@
         costEl.textContent = fmt(it.cost);
       }
       if (badge) badge.textContent = line && line.number ? String(line.number) : '';
+      var qtyEl = row.querySelector('[data-qty]');
+      if (qtyEl) qtyEl.textContent = '×' + pickQty(key);
       row.classList.toggle('picked', isPicked(key));
       row.classList.toggle('deferred', isDeferred(key));
       row.classList.toggle('skipped', isNotTaken(key));

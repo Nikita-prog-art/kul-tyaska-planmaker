@@ -294,12 +294,13 @@
     (summary.sections || []).forEach(function (sec) {
       out.push(sec.title + ':');
       sec.lines.forEach(function (l) {
+        var title = l.qty > 1 ? l.title + ' ×' + l.qty : l.title;
         if (l.deferred) {
-          out.push('  - ' + l.title + ' (' + (l.note || 'невыученный, в следующую жизнь') + ')');
+          out.push('  - ' + title + ' (' + (l.note || 'невыученный, в следующую жизнь') + ')');
         } else if (l.number > 0) {
-          out.push('  ' + l.number + '. ' + l.title + ': ' + fmt(l.cost, dec) + noteSuffix(l.note));
+          out.push('  ' + l.number + '. ' + title + ': ' + fmt(l.cost, dec) + noteSuffix(l.note));
         } else {
-          out.push('  - ' + l.title + ': ' + fmt(l.cost, dec) + noteSuffix(l.note));
+          out.push('  - ' + title + ': ' + fmt(l.cost, dec) + noteSuffix(l.note));
         }
       });
       out.push('  Сумма: ' + fmt(sec.sum, dec) + ', ост. ' + fmt(sec.remainder, dec));
@@ -308,11 +309,15 @@
 
     var act = [], skip = [];
     (plan.accumulators || []).forEach(function (a) {
-      var line = a.name + ' (' + number(a.charges) + '/' + number(a.max) + ', +' + number(a.rate) + '% за жизнь)';
+      // Если про заряды накопителя в тексте ничего нет, печатаем только имя.
+      var line = a.name;
+      if (number(a.charges) !== '0' || number(a.rate) !== '0') {
+        line += ' (' + number(a.charges) + '/' + number(a.max) + ', +' + number(a.rate) + '% за жизнь)';
+      }
       (a.activate ? act : skip).push(line);
     });
     if (act.length || skip.length) {
-      out.push('Накопители:');
+      out.push('Активация накопителей:');
       if (act.length) out.push('  - активирую: ' + act.join('; '));
       if (skip.length) out.push('  - не активирую: ' + skip.join('; '));
       out.push('');

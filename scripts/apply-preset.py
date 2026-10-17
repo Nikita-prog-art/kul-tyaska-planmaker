@@ -48,22 +48,43 @@ def main() -> int:
         if not p:
             continue
 
+        def remap_one(k):
+            if not k:
+                return None
+            if k in by_key:
+                return k
+            # ключ мог измениться вместе с названием позиции
+            old = next((it for it in (p.get("shop") or []) if it.get("key") == k), None)
+            if old:
+                return by_title.get((old.get("title") or "").lower())
+            return None
+
         def remap(keys):
             out = []
             for k in keys or []:
-                if k in by_key:
-                    out.append(k)
-                    continue
-                # ключ мог измениться вместе с названием позиции
-                old = next((it for it in (p.get("shop") or []) if it.get("key") == k), None)
-                if old:
-                    nk = by_title.get((old.get("title") or "").lower())
-                    if nk:
-                        out.append(nk)
+                nk = remap_one(k)
+                if nk:
+                    out.append(nk)
             return out
 
-        p["picks"] = [{"key": k, "qty": 1} for k in remap([pk.get("key") for pk in (p.get("picks") or [])])]
-        p["deferred"] = []
+        picks = []
+        for pk in p.get("picks") or []:
+            nk = remap_one(pk.get("key"))
+            if not nk:
+                continue
+            qty = pk.get("qty") or 1
+            limit = by_key[nk].get("repeat") or 0
+            if limit and qty > limit:
+                qty = limit
+            picks.append({"key": nk, "qty": qty})
+        p["picks"] = picks
+
+        deferred = []
+        for d in p.get("deferred") or []:
+            nk = remap_one(d.get("key"))
+            if nk:
+                deferred.append({"key": nk, "slot": len(deferred) + 1})
+        p["deferred"] = deferred
         p["not_taken"] = remap(p.get("not_taken") or [])
         p["shop"] = shop
         p["ladders"] = sk.get("ladders") or []

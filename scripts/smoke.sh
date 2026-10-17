@@ -74,6 +74,18 @@ if printf '%s' "$EDITOR" | grep -q '"reward_after"'; then
 else
   bad "в каркасе нет reward_after («последний бой» после «пинг систем»)"
 fi
+# Повторяемые покупки: «лестница в небо» дважды, «взять 1 фолиант» до трёх раз.
+if printf '%s' "$EDITOR" | grep -q '"repeat":2' && printf '%s' "$EDITOR" | grep -q '"repeat":3'; then
+  ok "повторяемые покупки помечены repeat"
+else
+  bad "в каркасе нет repeat (лестница в небо, взять фолиант)"
+fi
+# Цены сверены с планами игроков: оплата перерождения Джона Сноу — 200 XP.
+if printf '%s' "$EDITOR" | grep -q 'item:pererozhdenie_dzhona'; then
+  ok "оплата перерождения Джона Сноу есть в каркасе"
+else
+  bad "в каркасе нет оплаты перерождения Джона Сноу"
+fi
 TXT0="$(curl -sS --max-time 20 -b "$JAR" "$LOC/export?format=txt")"
 if printf '%s' "$TXT0" | grep -q "уже куплено"; then
   ok "в экспорте есть пометка «уже куплено»"
@@ -115,6 +127,12 @@ TXT="$(curl -sS --max-time 20 -b "$JAR" "$LOC/export?format=txt")"
 for needle in "Невыученные" "Остаток" "Итого потрачено" "[*]"; do
   if printf '%s' "$TXT" | grep -qF "$needle"; then ok "в экспорте есть «$needle»"; else bad "в экспорте нет «$needle»"; fi
 done
+# Отметки накопителей и фолиантов — отдельные блоки, как требует формат плана.
+if printf '%s' "$TXT" | grep -q "Активация накопителей:"; then
+  ok "в экспорте есть блок «Активация накопителей»"
+else
+  bad "в экспорте нет блока про активацию накопителей"
+fi
 
 check "страница экспорта" "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 -b "$JAR" "$LOC/export")" "200"
 PAGE="$(curl -sS --max-time 20 -b "$JAR" "$LOC/export")"
