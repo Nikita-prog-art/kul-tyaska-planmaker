@@ -288,8 +288,48 @@
   /* round6 убирает мусор от сложения дробей (0,8 + 20% = ровно 1). */
   function round6(v) { return Math.round(Number(v) * 1e6) / 1e6; }
 
+  /* accumulatorValues — состояние накопителя на момент перерождения с учётом
+     уже сделанных покупок: заряды, максимум и скорость зарядки. Прибавка за
+     прожитую жизнь (rate) сюда не входит: эти проценты накопитель получит
+     в следующей жизни, а на перерождении тратится то, что накоплено.
+     Заряд считается целыми единицами: 0,8 — ещё не заряд, а 1 из 2 — уже заряд. */
+  function accumulatorValues(plan, acc) {
+    var charges = Number(acc.charges) || 0;
+    var max = Number(acc.max) || 0;
+    var rate = Number(acc.rate) || 0;
+    (plan.picks || []).forEach(function (pk) {
+      var it = itemMap(plan)[pk.key];
+      if (!it) return;
+      var times = pk.qty > 0 ? pk.qty : 1;
+      (it.effects || []).forEach(function (e) {
+        if (e.accumulator !== acc.key) return;
+        charges += (Number(e.charges) || 0) * times;
+        max += (Number(e.max) || 0) * times;
+        // Скорость зарядки покупка задаёт, а не прибавляет: «до 25% за жизнь».
+        if (Number(e.rate) > 0) rate = Number(e.rate);
+      });
+    });
+    return { charges: round6(charges), max: round6(max), rate: round6(rate) };
+  }
+
+  /* accumulatorKnown — известно ли про накопитель что-то про заряды: либо
+     каркас их указал, либо их меняют покупки. */
+  function accumulatorKnown(plan, acc) {
+    if (Number(acc.charges) !== 0 || Number(acc.rate) !== 0) return true;
+    var touched = false;
+    (plan.picks || []).forEach(function (pk) {
+      var it = itemMap(plan)[pk.key];
+      if (!it) return;
+      (it.effects || []).forEach(function (e) {
+        if (e.accumulator === acc.key) touched = true;
+      });
+    });
+    return touched;
+  }
+
   /* accumulatorState — можно ли активировать накопитель: он должен быть
-     куплен (если каркас этого требует) и полностью заряжен. */
+     куплен (если каркас этого требует) и иметь хотя бы один целый заряд.
+     Накопитель на 1 из 2 уже можно тратить — заряд тратится по одному. */
   function accumulatorState(plan, acc) {
     var missing = missingPrereqs(plan, acc.requires);
     if (missing.length) {
@@ -298,15 +338,9 @@
         reason: 'сначала купи ' + missing.map(function (k) { return prereqText(plan, k); }).join(', ')
       };
     }
-    // Если про заряды в тексте ничего не известно, проверять нечего.
-    if (Number(acc.charges) !== 0 || Number(acc.rate) !== 0) {
-      var charges = round6(Number(acc.charges) + Number(acc.rate) / 100);
-      var max = Number(acc.max);
-      if (charges + 1e-9 < max) {
-        var rate = Number(acc.rate);
-        var tail = rate ? ' (с +' + number(rate) + '% за жизнь)' : '';
-        return { ready: false, reason: 'заряд не полный: ' + number(charges) + ' из ' + number(max) + tail };
-      }
+    var v = accumulatorValues(plan, acc);
+    if (accumulatorKnown(plan, acc) && v.charges < 1 - 1e-9) {
+      return { ready: false, reason: 'нет целого заряда: ' + number(v.charges) };
     }
     return { ready: true, reason: '' };
   }
@@ -402,8 +436,11 @@
     (plan.accumulators || []).forEach(function (a) {
       // Если про заряды накопителя в тексте ничего нет, печатаем только имя.
       var line = a.name;
-      if (number(a.charges) !== '0' || number(a.rate) !== '0') {
-        line += ' (' + number(a.charges) + '/' + number(a.max) + ', +' + number(a.rate) + '% за жизнь)';
+      if (accumulatorKnown(plan, a)) {
+        var v = accumulatorValues(plan, a);
+        line += ' (' + number(v.charges) + '/' + number(v.max);
+        if (v.rate) line += ', +' + number(v.rate) + '% за жизнь';
+        line += ')';
       }
       (a.activate ? act : skip).push(line);
     });
@@ -484,6 +521,8 @@
     visibleLadders: visibleLadders,
     itemMap: itemMap,
     missingPrereqs: missingPrereqs,
+    accumulatorValues: accumulatorValues,
+    accumulatorKnown: accumulatorKnown,
     accumulatorState: accumulatorState,
     folioState: folioState,
     pruneAttachments: pruneAttachments,

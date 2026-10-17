@@ -49,6 +49,8 @@ func fixturePlan(t *testing.T) *plan.Plan {
 		{Key: "item:hardkor", Qty: 1},
 		{Key: "folio:vzyat_1_foliant", Qty: 1},
 		{Key: "folio:vykupit_tuman", Qty: 1},
+		// Покупка, которая заряжает накопитель: «великий успех» станет 1,4/1.
+		{Key: "lesson:zarad_velikogo_uspeha", Qty: 1},
 		{Key: "item:pererozhdenie_dzhona", Qty: 1},
 	}
 	p.Deferred = []plan.Deferred{{Key: "lesson:metod_ognennogo_vodopada", Slot: 1}}
@@ -56,7 +58,8 @@ func fixturePlan(t *testing.T) *plan.Plan {
 	// Фолианты берём из каркаса: у них уже есть ключи и условия (урок + выкуп).
 	p.Folios[0].Take = true
 	for i := range p.Accumulators {
-		if p.Accumulators[i].Name == "горожане" || p.Accumulators[i].Name == "хардкор" {
+		switch p.Accumulators[i].Name {
+		case "хардкор", "великий успех":
 			p.Accumulators[i].Activate = true
 		}
 	}
@@ -801,13 +804,15 @@ func presetSkeleton(t *testing.T) *plan.Skeleton {
 }
 
 // TestAttachmentGate — отметки «активирую» и «беру» план обязан заслужить:
-// накопитель — зарядом (или покупкой), фолиант — уроком метода и выкупом.
+// накопитель — целым зарядом (или покупкой), фолиант — уроком метода и выкупом.
 func TestAttachmentGate(t *testing.T) {
 	sk := presetSkeleton(t)
 	p := sk.NewPlan("u", "проверка отметок", "")
 
-	// В свежем плане доступен только полностью заряженный накопитель.
-	ready := map[string]bool{"горожане": true}
+	// В свежем плане тратить нечего: «горожане» набрали 0,8 заряда из 1 —
+	// прибавка за жизнь достанется в следующей жизни, — а «хардкор»,
+	// «равновесие», «окрестности Му» и «великий успех» не заряжены.
+	ready := map[string]bool{}
 	for i := range p.Accumulators {
 		a := &p.Accumulators[i]
 		st := p.AccumulatorState(a)
@@ -816,6 +821,55 @@ func TestAttachmentGate(t *testing.T) {
 		}
 		if !st.Ready && st.Reason == "" {
 			t.Errorf("накопитель %q недоступен без объяснения", a.Name)
+		}
+	}
+	if st := p.AccumulatorState(&p.Accumulators[0]); !strings.Contains(st.Reason, "нет целого заряда: 0,8") {
+		t.Errorf("про «горожане» ждал причину про 0,8 заряда, получил %q", st.Reason)
+	}
+
+	// Заряд добавляют покупки: «заряд великого успеха» — сразу, «хардкор» —
+	// вместе с покупкой накопителя.
+	p.Picks = append(p.Picks,
+		plan.Pick{Key: "lesson:velikiy_uspeh"},
+		plan.Pick{Key: "lesson:zarad_velikogo_uspeha"},
+		plan.Pick{Key: "item:hardkor"},
+	)
+	p.Normalize()
+	for i := range p.Accumulators {
+		a := &p.Accumulators[i]
+		if a.Name != "великий успех" && a.Name != "хардкор" {
+			continue
+		}
+		if st := p.AccumulatorState(a); !st.Ready {
+			t.Errorf("накопитель %q должен быть готов: %s", a.Name, st.Reason)
+		}
+	}
+	// «горожане» покупками не заряжаются: 0,8 так и остаётся 0,8.
+	if _, max, _ := p.AccumulatorValues(&p.Accumulators[0]); max != 1 {
+		t.Errorf("максимум «горожан» без урока — 1, получил %v", max)
+	}
+	p.Picks = append(p.Picks, plan.Pick{Key: "lesson:maksimum_zaradov_gorozhan"})
+	p.Normalize()
+	charges, max, _ := p.AccumulatorValues(&p.Accumulators[0])
+	if charges != 0.8 || max != 2 {
+		t.Errorf("«максимум зарядов» поднимает максимум до 2: %v/%v", charges, max)
+	}
+	if st := p.AccumulatorState(&p.Accumulators[0]); st.Ready {
+		t.Error("«горожане» на 0,8 из 2 всё ещё не заряд — активировать нельзя")
+	}
+	// Накопитель на 1 из 2 уже можно тратить: заряд тратится по одному.
+	for i := range p.Accumulators {
+		if p.Accumulators[i].Name == "великий успех" {
+			p.Accumulators[i].Charges = 1
+		}
+	}
+	p.Normalize()
+	for i := range p.Accumulators {
+		a := &p.Accumulators[i]
+		if a.Name == "великий успех" {
+			if st := p.AccumulatorState(a); !st.Ready {
+				t.Errorf("1 заряд из 1 (с покупками максимум 2) — уже можно тратить: %s", st.Reason)
+			}
 		}
 	}
 
@@ -833,19 +887,19 @@ func TestAttachmentGate(t *testing.T) {
 	p.Normalize()
 	for i := range p.Accumulators {
 		a := &p.Accumulators[i]
-		if a.Activate != ready[a.Name] {
-			t.Errorf("после Normalize накопитель %q: активирую=%v", a.Name, a.Activate)
+		want := a.Name == "великий успех" || a.Name == "хардкор"
+		if a.Activate != want {
+			t.Errorf("после Normalize накопитель %q: активирую=%v, ждал %v", a.Name, a.Activate, want)
 		}
 	}
 	if p.Folios[0].Take {
 		t.Error("после Normalize невыкупленный фолиант остался отмеченным")
 	}
 
-	// Урок метода, выкуп и покупка накопителя открывают отметки.
+	// Урок метода и выкуп открывают фолиант.
 	p.Picks = append(p.Picks,
 		plan.Pick{Key: "lesson:metod_neproglyadnogo_tumana"},
 		plan.Pick{Key: "folio:vykupit_tuman"},
-		plan.Pick{Key: "item:hardkor"},
 	)
 	p.Normalize()
 	if st := p.FolioState(&p.Folios[0]); !st.Ready {

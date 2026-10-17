@@ -46,13 +46,9 @@ func Render(p *Plan, s *Summary) string {
 
 	// Накопители и фолианты — отдельными строками, как требует формат.
 	var act, skip []string
-	for _, a := range p.Accumulators {
-		line := a.Name
-		// Если про заряды накопителя в тексте ничего нет, печатаем только имя.
-		if a.Charges != 0 || a.Rate != 0 {
-			line = fmt.Sprintf("%s (%s/%s, +%s%% за жизнь)", a.Name, num(p, a.Charges), num(p, a.Max), num(p, a.Rate))
-		}
-		if a.Activate {
+	for i := range p.Accumulators {
+		line := accumulatorLine(p, &p.Accumulators[i])
+		if p.Accumulators[i].Activate {
 			act = append(act, line)
 		} else {
 			skip = append(skip, line)
@@ -133,6 +129,21 @@ func Render(p *Plan, s *Summary) string {
 		fmt.Fprintf(&b, "\n%s\n", strings.TrimSpace(p.Notes))
 	}
 	return b.String()
+}
+
+// accumulatorLine печатает накопитель с состоянием на момент перерождения:
+// заряды и максимум с учётом уже сделанных покупок. Если про заряды в тексте
+// ничего не известно, печатается только название.
+func accumulatorLine(p *Plan, a *Accumulator) string {
+	if !p.AccumulatorKnown(a) {
+		return a.Name
+	}
+	charges, max, rate := p.AccumulatorValues(a)
+	line := fmt.Sprintf("%s (%s/%s", a.Name, num(p, charges), num(p, max))
+	if rate != 0 {
+		line += fmt.Sprintf(", +%s%% за жизнь", num(p, rate))
+	}
+	return line + ")"
 }
 
 // noteSuffix печатает пометку к строке плана («уже куплено» и т. п.).

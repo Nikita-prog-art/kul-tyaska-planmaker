@@ -92,6 +92,17 @@ if printf '%s' "$EDITOR" | grep -q '"requires":\["item:hardkor"\]'; then
 else
   bad "у накопителя «хардкор» нет requires"
 fi
+# Покупки меняют накопитель: заряд, максимум и скорость зарядки.
+if printf '%s' "$EDITOR" | grep -q '"effects":\[{"accumulator":"acc:hardkor","charges":1}\]'; then
+  ok "покупка «хардкор» заряжает накопитель"
+else
+  bad "у «хардкора» нет effects с зарядом"
+fi
+if printf '%s' "$EDITOR" | grep -q '"accumulator":"acc:gorozhane","rate":25'; then
+  ok "скорость зарядки горожан задаётся покупкой"
+else
+  bad "у «скорости зарядки горожан» нет effects с rate"
+fi
 if printf '%s' "$EDITOR" | grep -q '"requires":\["lesson:metod_neproglyadnogo_tumana","folio:vykupit_tuman"\]'; then
   ok "фолиант берут после урока метода и выкупа"
 else

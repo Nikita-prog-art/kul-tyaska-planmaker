@@ -154,6 +154,22 @@ func (s *Skeleton) Normalize() error {
 	for i := range s.Accumulators {
 		s.Accumulators[i].Requires = existKeys(seen, s.Accumulators[i].Requires)
 	}
+	// Эффекты покупок ссылаются на накопители: чужие ключи тоже не нужны.
+	accSeen := map[string]bool{}
+	for i := range s.Accumulators {
+		accSeen[s.Accumulators[i].Key] = true
+	}
+	for i := range s.Shop {
+		it := &s.Shop[i]
+		var effects []ShopEffect
+		for _, e := range it.Effects {
+			if e.Accumulator == "" || !accSeen[e.Accumulator] {
+				continue
+			}
+			effects = append(effects, e)
+		}
+		it.Effects = effects
+	}
 	for i := range s.Folios {
 		f := &s.Folios[i]
 		if f.Key == "" {

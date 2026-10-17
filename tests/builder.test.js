@@ -516,12 +516,14 @@ test('«минимум n-м уроком» зеленеет, когда усло
 
 test('отметить можно только заряженный и купленный накопитель', () => {
   const d = bootPage(JSON.parse(JSON.stringify(plan))).document;
-  // «горожане» заряжаются за эту жизнь (0,8 + 20% = полный заряд) — можно.
-  assert.strictEqual(attachByRe(d, /горожане/).querySelector('input').disabled, false, 'заряженный накопитель доступен');
-  // «окрестности Му» заряжены на 4% — нельзя.
-  const mu = attachByRe(d, /окрестности/);
-  assert.strictEqual(mu.querySelector('input').disabled, true, 'незаряженный накопитель не отметить');
-  assert.ok(/заряд не полный/.test(mu.textContent), 'сказано, сколько заряда не хватает');
+  // «великий успех» заряжен покупкой «заряд великого успеха» (0,4 + 1 = 1,4) — можно.
+  const uspeh = attachByRe(d, /великий успех/);
+  assert.strictEqual(uspeh.querySelector('input').disabled, false, 'заряженный накопитель доступен');
+  assert.ok(/\(1,4\/1\)/.test(uspeh.textContent), 'видны заряды с учётом покупки: ' + uspeh.textContent);
+  // «горожане»: 0,8 заряда — целого заряда ещё нет, прибавка за жизнь будет позже.
+  const gorozhane = attachByRe(d, /горожане/);
+  assert.strictEqual(gorozhane.querySelector('input').disabled, true, 'незаряженный накопитель не отметить');
+  assert.ok(/нет целого заряда: 0,8/.test(gorozhane.textContent), 'сказано, сколько заряда не хватает');
   // «равновесие зла и добра» в план не куплено — нельзя.
   const ravno = attachByRe(d, /равновесие/);
   assert.strictEqual(ravno.querySelector('input').disabled, true, 'некупленный накопитель не отметить');

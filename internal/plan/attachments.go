@@ -13,36 +13,73 @@ type AttachmentState struct {
 	Reason string `json:"reason,omitempty"` // почему нельзя — подсказка в панели
 }
 
-// AccumulatorCharges — заряды накопителя на момент перерождения: к тому, что
-// записано в каркасе, добавляется прирост за прожитую жизнь. Если про заряды
-// в тексте ничего не известно (нули в каркасе), третий результат — false.
-func (p *Plan) AccumulatorCharges(a *Accumulator) (charges, max float64, known bool) {
-	if a.Charges == 0 && a.Rate == 0 {
-		return 0, a.Max, false
+// AccumulatorValues — состояние накопителя на момент перерождения с учётом
+// уже сделанных покупок: заряды, максимум и скорость зарядки. Заряд считается
+// целыми единицами: 0,8 — это ещё не заряд, а 1 из 2 — уже заряд.
+//
+// Прибавка за прожитую жизнь (rate) сюда не входит: эти проценты накопитель
+// получит в следующей жизни, а на перерождении тратится то, что накоплено.
+func (p *Plan) AccumulatorValues(a *Accumulator) (charges, max, rate float64) {
+	charges, max, rate = a.Charges, a.Max, a.Rate
+	for _, pick := range p.Picks {
+		it := p.Item(pick.Key)
+		if it == nil {
+			continue
+		}
+		times := pick.Qty
+		if times < 1 {
+			times = 1
+		}
+		for _, e := range it.Effects {
+			if e.Accumulator != a.Key {
+				continue
+			}
+			charges += e.Charges * float64(times)
+			max += e.Max * float64(times)
+			// Скорость зарядки покупка задаёт, а не прибавляет: «до 25% за жизнь».
+			if e.Rate > 0 {
+				rate = e.Rate
+			}
+		}
 	}
-	return a.Charges + a.Rate/100, a.Max, true
+	return charges, max, rate
 }
 
-// AccumulatorState говорит, можно ли активировать накопитель: купленный
-// (если каркас этого требует) и полностью заряженный.
+// accumulatorsTouched — покупки, которые вообще влияют на этот накопитель.
+func (p *Plan) accumulatorsTouched(a *Accumulator) bool {
+	for _, pick := range p.Picks {
+		it := p.Item(pick.Key)
+		if it == nil {
+			continue
+		}
+		for _, e := range it.Effects {
+			if e.Accumulator == a.Key {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// AccumulatorKnown сообщает, известны ли про накопитель заряды: либо каркас
+// их указал, либо их меняют покупки. Если про заряды в тексте ничего нет
+// (так бывает у накопителей, механика которых не расписана), проверять нечего.
+func (p *Plan) AccumulatorKnown(a *Accumulator) bool {
+	return a.Charges != 0 || a.Rate != 0 || p.accumulatorsTouched(a)
+}
+
+// AccumulatorState говорит, можно ли активировать накопитель: он должен быть
+// куплен (если каркас этого требует) и иметь хотя бы один целый заряд.
+// Накопитель на 1 из 2 уже можно тратить — заряд тратится по одному.
 func (p *Plan) AccumulatorState(a *Accumulator) AttachmentState {
 	if missing := p.missingPrereqs(a.Requires); len(missing) > 0 {
 		return AttachmentState{Reason: "сначала купи " + p.prereqList(missing)}
 	}
-	charges, max, known := p.AccumulatorCharges(a)
-	if known && charges+1e-9 < max {
-		return AttachmentState{Reason: fmt.Sprintf("заряд не полный: %s из %s%s",
-			formatNum(charges), formatNum(max), rateSuffix(a.Rate))}
+	charges, _, _ := p.AccumulatorValues(a)
+	if p.AccumulatorKnown(a) && charges < 1-1e-9 {
+		return AttachmentState{Reason: "нет целого заряда: " + comma(charges, 5, true)}
 	}
 	return AttachmentState{Ready: true}
-}
-
-// rateSuffix поясняет, что заряд посчитан с приростом за прожитую жизнь.
-func rateSuffix(rate float64) string {
-	if rate == 0 {
-		return ""
-	}
-	return fmt.Sprintf(" (с +%s%% за жизнь)", formatNum(rate))
 }
 
 // FolioState говорит, можно ли взять фолиант с собой: сначала урок метода,

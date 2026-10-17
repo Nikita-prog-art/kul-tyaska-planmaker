@@ -401,9 +401,14 @@
     if (accs.length) {
       body.push(h('div', { class: 'attach-list' }, accs.map(function (a) {
         var st = KT.accumulatorState(plan, a);
-        var label = a.name + (Number(a.charges) || Number(a.rate)
-          ? ' (' + KT.number(a.charges) + '/' + KT.number(a.max) + ', +' + KT.number(a.rate) + '% за жизнь)'
-          : '');
+        // Заряды печатаем, только если они вообще известны: с учётом покупок
+        // («заряд великого успеха», «максимум зарядов», «скорость зарядки»).
+        var label = a.name;
+        if (KT.accumulatorKnown(plan, a)) {
+          var v = KT.accumulatorValues(plan, a);
+          label += ' (' + KT.number(v.charges) + '/' + KT.number(v.max)
+            + (v.rate ? ', +' + KT.number(v.rate) + '% за жизнь' : '') + ')';
+        }
         if (!st.ready) label += ' — ' + st.reason;
         return h('label', {
           class: 'attach' + (st.ready ? '' : ' off'),

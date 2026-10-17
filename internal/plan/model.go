@@ -65,6 +65,18 @@ type ShopItem struct {
 	// RewardAfter — награда за порядок: позицию надо взять ПОСЛЕ другой
 	// позиции, иначе награда теряется («последний бой» после «пинг систем»).
 	RewardAfter *RewardAfter `json:"reward_after,omitempty"`
+	// Effects — что покупка делает с накопителями: «заряд великого успеха»
+	// добавляет заряд, «максимум зарядов» поднимает максимум, «скорость
+	// зарядки» задаёт новый процент за жизнь.
+	Effects []ShopEffect `json:"effects,omitempty"`
+}
+
+// ShopEffect — влияние покупки на накопитель.
+type ShopEffect struct {
+	Accumulator string  `json:"accumulator"`       // ключ накопителя
+	Charges     float64 `json:"charges,omitempty"` // +N зарядов сразу
+	Max         float64 `json:"max,omitempty"`     // +N к максимуму
+	Rate        float64 `json:"rate,omitempty"`    // новый процент за жизнь
 }
 
 // RewardAfter — условие «возьми это после того»: если позиция стоит в плане
