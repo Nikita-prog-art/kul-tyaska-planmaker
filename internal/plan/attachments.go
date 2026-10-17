@@ -99,16 +99,29 @@ func (p *Plan) prereqList(keys []string) string {
 }
 
 // prereqText — «название (цена)» для подсказки о недостающей покупке.
+// У выкупа фолианта убираем глагол из названия: «нужен выкуп «метод Тумана»».
 func (p *Plan) prereqText(key string) string {
 	it := p.Item(key)
 	if it == nil {
 		return key
 	}
-	title := displayTitle(it)
+	title := strings.TrimSpace(strings.TrimPrefix(displayTitle(it), "выкупить"))
+	if title == "" {
+		title = displayTitle(it)
+	}
+	title = quoteTitle(title)
 	if it.Cost > 0 {
 		return fmt.Sprintf("%s (%s XP)", title, formatNum(it.Cost))
 	}
 	return title
+}
+
+// quoteTitle берёт название в кавычки, если своих кавычек в нём нет.
+func quoteTitle(s string) string {
+	if strings.ContainsAny(s, "«»") {
+		return s
+	}
+	return "«" + s + "»"
 }
 
 // liveKeys оставляет только те ключи, которые есть в магазине плана.

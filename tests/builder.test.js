@@ -553,6 +553,22 @@ test('взять фолиант можно после урока и выкупа
     'фолиант попал в «беру с собой»');
 });
 
+test('перезагрузка каркаса не стирает отметки накопителей и фолиантов', () => {
+  const p = JSON.parse(JSON.stringify(plan));
+  const w = bootPage(p);
+  const d = w.document;
+  assert.strictEqual(attachByRe(d, /хардкор/).querySelector('input').checked, true, 'отметка до загрузки');
+  assert.strictEqual(attachByRe(d, /Непроглядного Тумана/).querySelector('input').checked, true, 'фолиант до загрузки');
+
+  // Открываем панель каркаса и жмём «Загрузить в план».
+  d.querySelector('.toolbar-actions .btn.ghost').click();
+  const buttons = d.querySelectorAll('#kt-import .row.gap.wrap .btn');
+  buttons[0].click();
+
+  assert.strictEqual(attachByRe(d, /хардкор/).querySelector('input').checked, true, 'отметка накопителя пережила загрузку');
+  assert.strictEqual(attachByRe(d, /Непроглядного Тумана/).querySelector('input').checked, true, 'отметка фолианта пережила загрузку');
+});
+
 if (failures) {
   console.error('\nПровалено проверок: ' + failures);
   process.exit(1);

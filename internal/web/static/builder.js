@@ -164,6 +164,18 @@
     plan.deferred.forEach(function (d, i) { d.slot = i + 1; });
   }
 
+  /* carryMarks переносит отметку («активирую» / «беру») из старого списка
+     накопителей или фолиантов в новый: совпадение по ключу или названию. */
+  function carryMarks(fresh, old, field) {
+    return (fresh || []).map(function (item) {
+      var prev = (old || []).filter(function (o) {
+        return (item.key && o.key === item.key) || (item.name && o.name === item.name);
+      })[0];
+      if (prev) item[field] = !!prev[field];
+      return item;
+    });
+  }
+
   /* syncLegacySections — держим разделы плана в согласии с магазином. */
   function syncLegacySections(key) {
     var it = item(key);
@@ -209,8 +221,10 @@
       return it;
     });
     plan.ladders = sk.ladders && sk.ladders.length ? sk.ladders : plan.ladders;
-    plan.accumulators = sk.accumulators || [];
-    plan.folios = sk.folios || [];
+    // Отметки накопителей и фолиантов переносим по ключу (или названию):
+    // перезагрузка каркаса не должна стирать их молча. Незаслуженные снимет render.
+    plan.accumulators = carryMarks(sk.accumulators, plan.accumulators, 'activate');
+    plan.folios = carryMarks(sk.folios, plan.folios, 'take');
     plan.balance = Number(sk.balance) || 0;
     plan.skeleton = sk.name || '';
     plan.earned = Number(sk.earned) || 0;

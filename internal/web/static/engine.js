@@ -274,11 +274,13 @@
     return out;
   }
 
-  /* prereqText — «название (цена)» для подсказки о недостающей покупке. */
+  /* prereqText — «название (цена)» для подсказки о недостающей покупке.
+     У выкупа фолианта убираем глагол: «нужен выкуп «метод Тумана»». */
   function prereqText(plan, key) {
     var it = itemMap(plan)[key];
     if (!it) return key;
-    var title = it.title || key;
+    var title = String(it.title || key).replace(/^выкупить\s*/, '') || String(it.title || key);
+    if (!/[«»]/.test(title)) title = '«' + title + '»';
     if (Number(it.cost) > 0) return title + ' (' + number(it.cost) + ' XP)';
     return title;
   }
