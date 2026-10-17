@@ -1085,25 +1085,35 @@
 
   // --- панели -----------------------------------------------------------
 
+  /* loadPreset тянет готовый каркас и накладывает его на план. */
+  function loadPreset(file) {
+    if (!file) return;
+    fetch('/presets/' + encodeURIComponent(file))
+      .then(function (r) { return r.json(); })
+      .then(function (sk) {
+        if (applySkeletonJson(JSON.stringify(sk), true)) {
+          markDirty();
+          closePanel('kt-import');
+          render();
+        }
+      })
+      .catch(function (err) { alert('Не удалось загрузить каркас: ' + err.message); });
+  }
+
   function renderImportPanel() {
-    var select = h('select', {
-      onchange: function (e) {
-        var name = e.target.value;
-        if (!name) return;
-        fetch('/presets/' + encodeURIComponent(name))
-          .then(function (r) { return r.json(); })
-          .then(function (sk) {
-            if (applySkeletonJson(JSON.stringify(sk), true)) {
-              markDirty();
-              closePanel('kt-import');
-              render();
-            }
-          })
-          .catch(function (err) { alert('Не удалось загрузить каркас: ' + err.message); });
-      }
-    }, [h('option', { value: '', text: '— выбрать готовый —' })].concat(presets.map(function (p) {
-      return h('option', { value: p.file, text: p.name + ' · ' + p.balance + ' XP' });
-    })));
+    var select = h('select', { onchange: function (e) { loadPreset(e.target.value); } },
+      [h('option', { value: '', text: '— выбрать готовый —' })].concat(presets.map(function (p) {
+        return h('option', { value: p.file, text: p.name + ' · ' + p.balance + ' XP' });
+      })));
+
+    // Каркас хранится внутри плана: если готовый каркас с тем же названием
+    // обновляли, цены и условия в плане отстали — подсказываем и даём кнопку.
+    var own = presets.filter(function (p) { return p.name === plan.skeleton; })[0];
+    var ownRow = own ? h('div', { class: 'muted small' }, [
+      'Каркас в плане: «' + plan.skeleton + '». ',
+      h('button', { class: 'btn ghost small', type: 'button', text: 'Обновить из готового', onclick: function () { loadPreset(own.file); } }),
+      ' — покупки и отметки сохранятся, а цены и условия станут текущими.'
+    ]) : null;
 
     var area = h('textarea', {
       id: 'kt-skeleton-text', class: 'mono', rows: 16, spellcheck: 'false',
@@ -1118,6 +1128,7 @@
           h('button', { class: 'btn ghost small', type: 'button', text: 'Закрыть', onclick: function () { closePanel('kt-import'); } })
         ]),
         h('p', { class: 'muted small', text: 'Вставь JSON каркаса, загрузи готовый или скачай текущий. Покупки по совпадающим названиям сохранятся.' }),
+        ownRow,
         h('div', { class: 'row gap wrap' }, [
           select,
           h('button', {

@@ -571,6 +571,24 @@ test('перезагрузка каркаса не стирает отметки
   assert.strictEqual(attachByRe(d, /Непроглядного Тумана/).querySelector('input').checked, true, 'отметка фолианта пережила загрузку');
 });
 
+test('в панели каркаса видно, что каркас в плане можно обновить', () => {
+  const p = JSON.parse(JSON.stringify(plan));
+  p.skeleton = 'Жизнь 8 · Заскорузлые пирамиды'; // так называется готовый каркас в списке
+  const w = bootPage(p);
+  const d = w.document;
+  d.querySelector('.toolbar-actions .btn.ghost').click();
+  const panel = d.getElementById('kt-import');
+  assert.ok(/Каркас в плане/.test(panel.textContent), 'сказано, какой каркас внутри плана');
+  const btn = Array.prototype.find.call(panel.querySelectorAll('button'), (b) => /Обновить из готового/.test(b.textContent));
+  assert.ok(btn, 'есть кнопка обновления каркаса');
+  // План с другим каркасом: подсказки нет, обновлять нечего.
+  const other = JSON.parse(JSON.stringify(plan));
+  other.skeleton = 'Жизнь 9 · что-то другое';
+  const d2 = bootPage(other).document;
+  d2.querySelector('.toolbar-actions .btn.ghost').click();
+  assert.ok(!/Каркас в плане/.test(d2.getElementById('kt-import').textContent), 'чужой каркас не предлагаем');
+});
+
 if (failures) {
   console.error('\nПровалено проверок: ' + failures);
   process.exit(1);
