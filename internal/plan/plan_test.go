@@ -775,6 +775,7 @@ func TestPlansFromPlayers(t *testing.T) {
 			if len(got.Warnings) > 0 {
 				t.Errorf("план должен сходиться без проверок, получил %v", got.Warnings)
 			}
+			t.Logf("потрачено %v, остаток %v (%s)", got.Total, got.Remainder, c.comment)
 			if diff := got.Remainder - c.want; diff > 1e-6 || diff < -1e-6 {
 				t.Errorf("%s: остаток %v, ждал %v (потрачено %v)",
 					c.comment, got.Remainder, c.want, got.Total)
