@@ -92,6 +92,8 @@
   <h2>Каркас посмертия</h2>
   <p>Магазин под конкретную смерть описывается JSON-ом и загружается в план в конструкторе или через список готовых каркасов.
      Формат: <code>name</code>, <code>balance</code>, <code>shop[]</code>, <code>ladders[]</code>, <code>accumulators[]</code>, <code>folios[]</code>.</p>
+  <p class="muted small">В каркас попадает только то, что предложено в этом посмертии: уроки между смертями не
+     переносятся, поэтому предложения прошлых жизней в новый каркас не переезжают.</p>
   <p class="muted small">Позиция магазина: <code>{"title": "будь сильнее", "kind": "lesson", "cost": 5, "fixed": false, "min_lesson": 1, "section": "lessons", "desc": "…"}</code></p>
   <p class="muted small">Условие покупки — <code>requires</code>: например, у выкупа
      <code>{"key": "folio:vykupit_tuman", "requires": ["lesson:metod_neproglyadnogo_tumana"]}</code>,

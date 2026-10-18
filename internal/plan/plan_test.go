@@ -32,7 +32,6 @@ func fixturePlan(t *testing.T) *plan.Plan {
 	p := sk.NewPlan("user-1", "План «всё влезет»", "🔥")
 	p.Picks = []plan.Pick{
 		{Key: "patch:otkluchenie_trenirovok"},
-		{Key: "lesson:velikiy_uspeh"},
 		{Key: "lesson:uchene_svet"},
 		{Key: "lesson:prirozhdennyy_alhimik"},
 		{Key: "lesson:da_sdohni_zhe"},
@@ -49,8 +48,10 @@ func fixturePlan(t *testing.T) *plan.Plan {
 		{Key: "item:hardkor", Qty: 1},
 		{Key: "folio:vzyat_1_foliant", Qty: 1},
 		{Key: "folio:vykupit_tuman", Qty: 1},
-		// Покупка, которая заряжает накопитель: «великий успех» станет 1,4/1.
-		{Key: "lesson:zarad_velikogo_uspeha", Qty: 1},
+		// Покупки, которые меняют накопитель: «максимум зарядов» поднимает
+		// максимум «горожан» до 2, «скорость зарядки» — 20% до 25% за жизнь.
+		{Key: "lesson:maksimum_zaradov_gorozhan", Qty: 1},
+		{Key: "lesson:skorost_zaradki_gorozhan", Qty: 1},
 		{Key: "item:pererozhdenie_dzhona", Qty: 1},
 	}
 	p.Deferred = []plan.Deferred{{Key: "lesson:metod_ognennogo_vodopada", Slot: 1}}
@@ -59,7 +60,7 @@ func fixturePlan(t *testing.T) *plan.Plan {
 	p.Folios[0].Take = true
 	for i := range p.Accumulators {
 		switch p.Accumulators[i].Name {
-		case "хардкор", "великий успех":
+		case "хардкор":
 			p.Accumulators[i].Activate = true
 		}
 	}
@@ -811,7 +812,9 @@ func TestAttachmentGate(t *testing.T) {
 
 	// В свежем плане тратить нечего: «горожане» набрали 0,8 заряда из 1 —
 	// прибавка за жизнь достанется в следующей жизни, — а «хардкор»,
-	// «равновесие», «окрестности Му» и «великий успех» не заряжены.
+	// «равновесие», «окрестности Му» не заряжены, «великий успех» набрал
+	// половину заряда и в этом посмертии поднять его нечем: уроки на заряд
+	// и максимум заряда остались в прошлых посмертиях и сюда не переносятся.
 	ready := map[string]bool{}
 	for i := range p.Accumulators {
 		a := &p.Accumulators[i]
@@ -826,18 +829,24 @@ func TestAttachmentGate(t *testing.T) {
 	if st := p.AccumulatorState(&p.Accumulators[0]); !strings.Contains(st.Reason, "нет целого заряда: 0,8") {
 		t.Errorf("про «горожане» ждал причину про 0,8 заряда, получил %q", st.Reason)
 	}
+	for i := range p.Accumulators {
+		if p.Accumulators[i].Name != "великий успех" {
+			continue
+		}
+		if st := p.AccumulatorState(&p.Accumulators[i]); !strings.Contains(st.Reason, "нет целого заряда: 0,5") {
+			t.Errorf("«великий успех» ждал причину про 0,5 заряда, получил %q", st.Reason)
+		}
+	}
+	if p.Item("lesson:zarad_velikogo_uspeha") != nil || p.Item("lesson:velikiy_uspeh") != nil {
+		t.Error("уроки на заряд «великого успеха» не должны предлагаться в этом посмертии")
+	}
 
-	// Заряд добавляют покупки: «заряд великого успеха» — сразу, «хардкор» —
-	// вместе с покупкой накопителя.
-	p.Picks = append(p.Picks,
-		plan.Pick{Key: "lesson:velikiy_uspeh"},
-		plan.Pick{Key: "lesson:zarad_velikogo_uspeha"},
-		plan.Pick{Key: "item:hardkor"},
-	)
+	// Заряд добавляют покупки: купленный «хардкор» приходит уже заряженным.
+	p.Picks = append(p.Picks, plan.Pick{Key: "item:hardkor"})
 	p.Normalize()
 	for i := range p.Accumulators {
 		a := &p.Accumulators[i]
-		if a.Name != "великий успех" && a.Name != "хардкор" {
+		if a.Name != "хардкор" {
 			continue
 		}
 		if st := p.AccumulatorState(a); !st.Ready {
@@ -848,27 +857,30 @@ func TestAttachmentGate(t *testing.T) {
 	if _, max, _ := p.AccumulatorValues(&p.Accumulators[0]); max != 1 {
 		t.Errorf("максимум «горожан» без урока — 1, получил %v", max)
 	}
-	p.Picks = append(p.Picks, plan.Pick{Key: "lesson:maksimum_zaradov_gorozhan"})
+	p.Picks = append(p.Picks,
+		plan.Pick{Key: "lesson:maksimum_zaradov_gorozhan"},
+		plan.Pick{Key: "lesson:skorost_zaradki_gorozhan"},
+	)
 	p.Normalize()
-	charges, max, _ := p.AccumulatorValues(&p.Accumulators[0])
-	if charges != 0.8 || max != 2 {
-		t.Errorf("«максимум зарядов» поднимает максимум до 2: %v/%v", charges, max)
+	charges, max, rate := p.AccumulatorValues(&p.Accumulators[0])
+	if charges != 0.8 || max != 2 || rate != 25 {
+		t.Errorf("«максимум зарядов» даёт 2, «скорость зарядки» — 25%%: %v/%v +%v%%", charges, max, rate)
 	}
 	if st := p.AccumulatorState(&p.Accumulators[0]); st.Ready {
 		t.Error("«горожане» на 0,8 из 2 всё ещё не заряд — активировать нельзя")
 	}
 	// Накопитель на 1 из 2 уже можно тратить: заряд тратится по одному.
 	for i := range p.Accumulators {
-		if p.Accumulators[i].Name == "великий успех" {
+		if p.Accumulators[i].Name == "горожане" {
 			p.Accumulators[i].Charges = 1
 		}
 	}
 	p.Normalize()
 	for i := range p.Accumulators {
 		a := &p.Accumulators[i]
-		if a.Name == "великий успех" {
+		if a.Name == "горожане" {
 			if st := p.AccumulatorState(a); !st.Ready {
-				t.Errorf("1 заряд из 1 (с покупками максимум 2) — уже можно тратить: %s", st.Reason)
+				t.Errorf("1 заряд из 2 (с покупкой максимума) — уже можно тратить: %s", st.Reason)
 			}
 		}
 	}
@@ -887,7 +899,7 @@ func TestAttachmentGate(t *testing.T) {
 	p.Normalize()
 	for i := range p.Accumulators {
 		a := &p.Accumulators[i]
-		want := a.Name == "великий успех" || a.Name == "хардкор"
+		want := a.Name == "горожане" || a.Name == "хардкор"
 		if a.Activate != want {
 			t.Errorf("после Normalize накопитель %q: активирую=%v, ждал %v", a.Name, a.Activate, want)
 		}

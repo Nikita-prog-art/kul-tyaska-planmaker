@@ -83,24 +83,28 @@ test('фиксированная цена не съедает номер уро�
   const numbered = lessons.lines.filter((l) => l.number > 0).map((l) => l.number);
   // Номера идут подряд: урок-трофей за 0 XP («метод Ядовитых Миазмов»)
   // и фиксированная «Дева-в-Беде» номер не занимают.
-  assert.deepStrictEqual(numbered, [1, 2, 3, 4, 5, 6, 7, 8]);
+  assert.deepStrictEqual(numbered, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
 });
 
 test('накопитель активируется, только если заряжен или куплен', () => {
   const byName = (n) => plan.accumulators.filter((a) => a.name.indexOf(n) >= 0)[0];
   // «горожане»: 0,8 заряда — целого заряда ещё нет (прибавка за жизнь
-  // достанется в следующей жизни), тратить нечего.
+  // достанется в следующей жизни), тратить нечего. Уроки этого посмертия
+  // подняли максимум до 2 и скорость зарядки до 25%.
   const gorozhane = KT.accumulatorState(plan, byName('горожане'));
   assert.strictEqual(gorozhane.ready, false);
   assert.ok(gorozhane.reason.indexOf('нет целого заряда: 0,8') >= 0, gorozhane.reason);
+  assert.deepStrictEqual(KT.accumulatorValues(plan, byName('горожане')), { charges: 0.8, max: 2, rate: 25 });
   // «окрестности Му» — вообще 0,03.
   assert.strictEqual(KT.accumulatorState(plan, byName('окрестности')).ready, false);
   // «хардкор» куплен в плане — покупка его и заряжает.
   assert.strictEqual(KT.accumulatorState(plan, byName('хардкор')).ready, true);
-  // «заряд великого успеха» добавляет заряд сразу: 0,4 + 1 = 1,4.
+  // «великий успех» набрал половину заряда, а поднять его в этом посмертии
+  // нечем: уроки «великий успех» и «заряд великого успеха» остались в прошлых.
   const uspeh = byName('великий успех');
-  assert.strictEqual(KT.accumulatorState(plan, uspeh).ready, true);
-  assert.strictEqual(KT.accumulatorValues(plan, uspeh).charges, 1.4);
+  assert.strictEqual(KT.accumulatorState(plan, uspeh).ready, false);
+  assert.strictEqual(KT.accumulatorValues(plan, uspeh).charges, 0.5);
+  assert.ok(KT.accumulatorState(plan, uspeh).reason.indexOf('нет целого заряда: 0,5') >= 0);
   // «равновесие» не куплено — нельзя.
   const ravno = KT.accumulatorState(plan, byName('равновесие'));
   assert.strictEqual(ravno.ready, false);
@@ -109,14 +113,12 @@ test('накопитель активируется, только если за�
 
 test('заряд тратится по одному: 1 из 2 — уже можно', () => {
   const p = JSON.parse(JSON.stringify(plan));
-  const uspeh = p.accumulators.filter((a) => a.name.indexOf('великий успех') >= 0)[0];
-  // Оставляем только «максимум зарядов великого успеха»: заряда нет, максимум 2.
-  p.picks = p.picks.filter((x) => x.key !== 'lesson:zarad_velikogo_uspeha');
-  p.picks.push({ key: 'lesson:maksimum_zaradov', qty: 1 });
-  assert.deepStrictEqual(KT.accumulatorValues(p, uspeh), { charges: 0.4, max: 2, rate: 0 });
-  assert.strictEqual(KT.accumulatorState(p, uspeh).ready, false, '0,4 из 2 — не заряд');
-  uspeh.charges = 1;
-  assert.strictEqual(KT.accumulatorState(p, uspeh).ready, true, '1 из 2 — уже целый заряд');
+  const gor = p.accumulators.filter((a) => a.name.indexOf('горожане') >= 0)[0];
+  // В плане есть «максимум зарядов накопителя «горожане»»: максимум 2, заряд 0,8.
+  assert.deepStrictEqual(KT.accumulatorValues(p, gor), { charges: 0.8, max: 2, rate: 25 });
+  assert.strictEqual(KT.accumulatorState(p, gor).ready, false, '0,8 из 2 — не заряд');
+  gor.charges = 1;
+  assert.strictEqual(KT.accumulatorState(p, gor).ready, true, '1 из 2 — уже целый заряд');
 });
 
 test('фолиант берут после урока метода и выкупа, и это бесплатно', () => {
@@ -134,10 +136,13 @@ test('фолиант берут после урока метода и выкуп
   const before = KT.computeSummary(bare, sections).total;
   bare.folios[0].take = true;
   bare.accumulators.forEach((a) => { a.activate = true; });
+  // «горожане» доводим до целого заряда: тогда отметка заслужена.
+  bare.accumulators.filter((a) => a.name.indexOf('горожане') >= 0)[0].charges = 1;
   assert.ok(KT.pruneAttachments(bare) > 0, 'сняты незаслуженные отметки');
   assert.strictEqual(bare.folios[0].take, false);
   const left = bare.accumulators.filter((a) => a.activate).map((a) => a.name).sort();
-  assert.deepStrictEqual(left, ['великий успех', 'хардкор'], 'остались только заряженные и купленные');
+  assert.deepStrictEqual(left, ['горожане', 'хардкор'],
+    'остались только заряженный «горожане» и купленный «хардкор»; «великий успех» с 0,5 и «окрестности Му» с 0,03 сняты');
   assert.strictEqual(KT.computeSummary(bare, sections).total, before, 'отметки фолиантов денег не стоят');
 });
 

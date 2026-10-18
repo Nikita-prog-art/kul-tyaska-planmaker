@@ -282,6 +282,7 @@ test('каркас скачивается и загружается обратн
   assert.strictEqual(document.getElementById('kt-balance').value.trim(), '5000', 'баланс подхватился');
   const after = stateText();
   assert.strictEqual(after.picks.length, before.picks.length, 'покупки сохранились при загрузке каркаса');
+  assert.deepStrictEqual(after.not_taken, before.not_taken, '«не беру» переживает загрузку каркаса');
 });
 
 let currentSummary = null;
@@ -310,14 +311,14 @@ test('план с null вместо пустых списков не ломае�
   assert.ok(d.querySelectorAll('.row.item').length > 0, 'строки магазина отрисовались');
 
   const row = Array.prototype.find.call(d.querySelectorAll('.row.item'), (r) =>
-    r.querySelector('.item-title').textContent.indexOf('великий успех') >= 0);
-  assert.ok(row, 'нашёл урок «великий успех»');
+    r.querySelector('.item-title').textContent.indexOf('ученье — свет!') >= 0);
+  assert.ok(row, 'нашёл урок «ученье — свет!»');
 
   row.querySelector('.state.pick').click(); // до починки здесь падало на plan.picks.some
   d.querySelector('.toolbar .btn:not(.ghost)').click(); // «Сохранить» — состояние уходит в форму
   const st = JSON.parse(d.getElementById('kt-state').value || 'null');
   assert.ok(st && Array.isArray(st.picks), 'состояние сохраняется массивом');
-  assert.ok(st.picks.some((p) => /velikiy_uspeh/.test(p.key)), 'выбранный урок записался');
+  assert.ok(st.picks.some((p) => /uchene_svet/.test(p.key)), 'выбранный урок записался');
   assert.ok(st.picks.some((p) => /poceluy/.test(p.key)), 'обязательная позиция каркаса тоже на месте');
   assert.ok(d.getElementById('sum-spent').textContent.length > 0, 'суммы пересчитались');
 });
@@ -499,31 +500,53 @@ test('накопители и фолианты отмечаются отдель
 });
 
 test('«минимум n-м уроком» зеленеет, когда условие выполнено', () => {
-  const p = JSON.parse(JSON.stringify(plan));
-  // «максимум зарядов великого успеха» (минимум вторым) ставим сразу после
-  // уже купленного «поцелуя Мелисандры» — требование выполняется.
-  p.picks.splice(1, 0, { key: 'lesson:maksimum_zaradov', qty: 1 });
-  const d = bootPage(p).document;
+  // «дилетантка широкого профиля» просит минимум седьмой урок.
+  const base = JSON.parse(JSON.stringify(plan));
+  base.picks = [
+    { key: 'lesson:poceluy_melisandry' },
+    { key: 'lesson:diletantka_shirokogo_profilya' }, // второй — рано
+    { key: 'lesson:uchene_svet' },
+    { key: 'lesson:prirozhdennyy_alhimik' },
+    { key: 'lesson:da_sdohni_zhe' },
+    { key: 'lesson:posledniy_boy' },
+    { key: 'lesson:ping_sistem' }
+  ];
+  base.deferred = [];
+  base.not_taken = [];
 
-  const good = rowByTitleIn(d, 'максимум зарядов великого успеха').querySelector('[data-min-tag]');
-  assert.ok(good, 'тег «минимум n-ным» на месте');
+  const early = rowByTitleIn(bootPage(base).document, 'дилетантка широкого профиля')
+    .querySelector('[data-min-tag]');
+  assert.ok(early, 'тег «минимум n-ным» на месте');
+  assert.ok(early.classList.contains('warn') && !early.classList.contains('ok'), 'нарушенное требование красное');
+
+  // Тот же урок седьмым: требование выполнено — тег зеленеет.
+  const late = JSON.parse(JSON.stringify(base));
+  late.picks.splice(1, 1);
+  late.picks.push({ key: 'lesson:diletantka_shirokogo_profilya' });
+  const good = rowByTitleIn(bootPage(late).document, 'дилетантка широкого профиля')
+    .querySelector('[data-min-tag]');
   assert.ok(good.classList.contains('ok') && !good.classList.contains('warn'), 'выполненное требование зелёное');
   assert.ok(/условие выполнено/.test(good.title), 'в подсказке видно, что условие выполнено');
 
-  const bad = rowByTitleIn(d, 'пинг систем').querySelector('[data-min-tag]');
+  const bad = rowByTitleIn(bootPage(base).document, 'пинг систем').querySelector('[data-min-tag]');
   assert.ok(bad.classList.contains('warn') && !bad.classList.contains('ok'), 'нарушенное требование красное');
 });
 
 test('отметить можно только заряженный и купленный накопитель', () => {
   const d = bootPage(JSON.parse(JSON.stringify(plan))).document;
-  // «великий успех» заряжен покупкой «заряд великого успеха» (0,4 + 1 = 1,4) — можно.
+  // «хардкор» куплен в плане — покупка его и заряжает.
+  const hardkor = attachByRe(d, /хардкор/);
+  assert.strictEqual(hardkor.querySelector('input').disabled, false, 'заряженный накопитель доступен');
+  assert.ok(/\(1\/1\)/.test(hardkor.textContent), 'видны заряды: ' + hardkor.textContent);
+  // «великий успех» набрал половину заряда, а поднять его в этом посмертии
+  // нечем: уроки на заряд остались в прошлых посмертиях.
   const uspeh = attachByRe(d, /великий успех/);
-  assert.strictEqual(uspeh.querySelector('input').disabled, false, 'заряженный накопитель доступен');
-  assert.ok(/\(1,4\/1\)/.test(uspeh.textContent), 'видны заряды с учётом покупки: ' + uspeh.textContent);
-  // «горожане»: 0,8 заряда — целого заряда ещё нет, прибавка за жизнь будет позже.
+  assert.strictEqual(uspeh.querySelector('input').disabled, true, 'незаряженный накопитель не отметить');
+  assert.ok(/нет целого заряда: 0,5/.test(uspeh.textContent), 'сказано, сколько заряда не хватает');
+  // «горожане»: 0,8 заряда, зато уроки подняли максимум и скорость зарядки.
   const gorozhane = attachByRe(d, /горожане/);
   assert.strictEqual(gorozhane.querySelector('input').disabled, true, 'незаряженный накопитель не отметить');
-  assert.ok(/нет целого заряда: 0,8/.test(gorozhane.textContent), 'сказано, сколько заряда не хватает');
+  assert.ok(/\(0,8\/2, \+25% за жизнь\)/.test(gorozhane.textContent), 'видны заряды и скорость: ' + gorozhane.textContent);
   // «равновесие зла и добра» в план не куплено — нельзя.
   const ravno = attachByRe(d, /равновесие/);
   assert.strictEqual(ravno.querySelector('input').disabled, true, 'некупленный накопитель не отметить');
@@ -587,6 +610,29 @@ test('в панели каркаса видно, что каркас в план
   const d2 = bootPage(other).document;
   d2.querySelector('.toolbar-actions .btn.ghost').click();
   assert.ok(!/Каркас в плане/.test(d2.getElementById('kt-import').textContent), 'чужой каркас не предлагаем');
+});
+
+test('обновление каркаса говорит, если покупка пропала из посмертия', () => {
+  const p = JSON.parse(JSON.stringify(plan));
+  const w = bootPage(p);
+  const d = w.document;
+  const seen = [];
+  w.alert = (msg) => { seen.push(msg); };
+
+  d.querySelector('.toolbar-actions .btn.ghost').click(); // «Каркас»
+  const area = d.getElementById('kt-skeleton-text');
+  const sk = JSON.parse(area.value);
+  assert.ok(sk.shop.some((it) => it.key === 'lesson:uchene_svet'), 'урок «ученье — свет!» в каркасе');
+  // Так выглядит каркас после правки: урока в этом посмертии больше нет.
+  sk.shop = sk.shop.filter((it) => it.key !== 'lesson:uchene_svet');
+  area.value = JSON.stringify(sk);
+  d.querySelectorAll('#kt-import .row.gap.wrap .btn')[0].click(); // «Загрузить в план»
+
+  assert.ok(/нет покупок: ученье — свет!/.test(seen.join('\n')), 'про пропажу сказано: ' + seen.join(' / '));
+  d.querySelector('.toolbar .btn:not(.ghost)').click(); // «Сохранить»
+  const st = JSON.parse(d.getElementById('kt-state').value);
+  assert.ok(!st.picks.some((x) => x.key === 'lesson:uchene_svet'), 'исчезнувшая покупка убрана из плана');
+  assert.ok(st.picks.some((x) => x.key === 'lesson:ping_sistem'), 'остальные покупки на месте');
 });
 
 if (failures) {

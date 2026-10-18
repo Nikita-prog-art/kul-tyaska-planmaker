@@ -244,24 +244,35 @@
     // Старые ключи, если совпадают по названию, переносим.
     var byTitle = {};
     plan.shop.forEach(function (it) { byTitle[(it.title || '').toLowerCase()] = it.key; });
-    function remap(list, keyName) {
+    var lost = [];
+    function remap(list, keyName, reportLost) {
       var out = [];
-      list.forEach(function (entry) {
-        var k = entry[keyName];
+      (list || []).forEach(function (entry) {
+        // «не беру» хранится строками, покупки и отложенные — объектами {key}.
+        var k = typeof entry === 'string' ? entry : entry[keyName];
+        if (!k) return;
         if (item(k)) { out.push(entry); return; }
         var old = oldShop.filter(function (o) { return o.key === k; })[0];
         if (old && byTitle[(old.title || '').toLowerCase()]) {
           if (keyName === 'key') out.push({ key: byTitle[old.title.toLowerCase()], qty: entry.qty || 1 });
           else out.push({ key: byTitle[old.title.toLowerCase()], slot: entry.slot || 0 });
+          return;
         }
+        // Покупки, которых в новом каркасе больше нет, из плана уходят:
+        // в этом посмертии их не предлагают. О таком надо сказать вслух.
+        if (reportLost) lost.push((old && old.title) || k);
       });
       return out;
     }
-    plan.picks = remap(oldPicks, 'key');
-    plan.deferred = remap(oldDeferred, 'key');
-    plan.not_taken = remap(oldNotTaken, 'key').map(function (e) { return typeof e === 'string' ? e : e.key; });
+    plan.picks = remap(oldPicks, 'key', true);
+    plan.deferred = remap(oldDeferred, 'key', true);
+    plan.not_taken = remap(oldNotTaken, 'key', false).map(function (e) { return typeof e === 'string' ? e : e.key; });
     enforceLocked(plan);
     renumberSlots();
+    if (lost.length) {
+      alert('В новом каркасе нет покупок: ' + lost.join(', ') +
+        '. Они убраны из плана — в этом посмертии их не предлагают, очки освободились.');
+    }
     return true;
   }
 
@@ -1172,7 +1183,7 @@
               multipliers: ['Женский пол: ×1,5'],
               shop: [
                 { key: 'lesson:ping_sistem', kind: 'lesson', section: 'lessons', title: 'пинг систем', min_lesson: 10, cost: 0, fixed: true, tags: ['one_chance'], desc: '…' },
-                { key: 'lesson:velikiy_uspeh', kind: 'lesson', section: 'lessons', title: 'великий успех', desc: '…' }
+                { key: 'lesson:uchene_svet', kind: 'lesson', section: 'lessons', title: 'ученье — свет!', min_lesson: 4, desc: '…' }
               ],
               ladders: [{ key: 'talent.die', section: 'talent', title: 'кость таланта', unit: 'd', from: 1, to: 22, step: 1, value: 1, cost: { type: 'to_value', rate: 1 } }],
               accumulators: [{ key: 'acc:gorozhane', name: 'горожане', charges: 0.8, max: 1, rate: 20 }],
