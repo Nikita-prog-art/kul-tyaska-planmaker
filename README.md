@@ -88,6 +88,15 @@ scripts/test.sh
 ./scripts/smoke.sh https://…      # дымовая проверка по публичному адресу
 ```
 
+Провайдеры в РФ нередко рубят 22-й порт, и тогда ssh падает с `Connection refused`,
+хотя сервер жив: выкладку и `scripts/rssh` можно пустить через локальный прокси
+(`scripts/ssh-relay.py` умеет HTTP CONNECT и SOCKS5):
+
+```bash
+KT_SSH_PROXY=socks5://127.0.0.1:10808 ./scripts/deploy.sh
+KT_SSH_PROXY=http://127.0.0.1:10809 scripts/rssh 'sudo systemctl is-active kul-tyaska'
+```
+
 Скрипт собирает статический бинарник, кладёт его в `/opt/kul-tyaska/kultyaska`, ставит два
 systemd-сервиса (`kul-tyaska.service` — приложение на `127.0.0.1:8080`, `kul-tyaska-tunnel.service` —
 Cloudflare Tunnel с токеном из `.env`) и перезапускает их. База живёт в `/var/lib/kultyaska/kultyaska.json`.

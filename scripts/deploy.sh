@@ -4,7 +4,9 @@
 #   ./scripts/deploy.sh            # собрать и выложить
 #   ./scripts/deploy.sh --no-build # выложить уже собранный бинарник
 #
-# Переменные: DEPLOY_HOST (по умолчанию nikita@162.254.85.195).
+# Переменные: DEPLOY_HOST (по умолчанию nikita@162.254.85.195), KT_SSH_PROXY —
+# локальный прокси для ssh, если провайдер режет 22-й порт
+# (например, KT_SSH_PROXY=socks5://127.0.0.1:10808).
 # Токен туннеля берётся из .env (CF_TUNNEL_TOKEN) и уезжает в /etc/kul-tyaska/tunnel.token.
 set -euo pipefail
 
@@ -12,6 +14,9 @@ cd "$(dirname "$0")/.."
 ROOT="$PWD"
 HOST="${DEPLOY_HOST:-nikita@162.254.85.195}"
 SSH_OPTS=(-F /dev/null -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4)
+if [ -n "${KT_SSH_PROXY:-}" ]; then
+  SSH_OPTS+=(-o "ProxyCommand=python3 $ROOT/scripts/ssh-relay.py %h %p")
+fi
 BUILD=1
 [ "${1:-}" = "--no-build" ] && BUILD=0
 
