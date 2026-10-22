@@ -205,6 +205,9 @@ type Plan struct {
 	Folios       []Folio       `json:"folios"`
 	Ladders      []LadderCfg   `json:"ladders"`
 	Requirements []Requirement `json:"requirements,omitempty"`
+	// DeferredSlots — сколько слотов «невыученных уроков» открыто к этой смерти:
+	// число приходит из каркаса, урок с тегом defer_slot добавляет ещё один.
+	DeferredSlots int `json:"deferred_slots,omitempty"`
 
 	Notes   string  `json:"notes,omitempty"`
 	Options Options `json:"options"`
@@ -243,6 +246,9 @@ func (p *Plan) Normalize() {
 	}
 	if p.Mults == nil {
 		p.Mults = []string{}
+	}
+	if p.DeferredSlots < 1 {
+		p.DeferredSlots = 1
 	}
 	for i := range p.Shop {
 		it := &p.Shop[i]

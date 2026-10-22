@@ -21,6 +21,11 @@ type Skeleton struct {
 	Ladders      []LadderCfg   `json:"ladders,omitempty"`
 	Accumulators []Accumulator `json:"accumulators,omitempty"`
 	Folios       []Folio       `json:"folios,omitempty"`
+	// DeferredSlots — сколько слотов «невыученных уроков» уже открыто к этой
+	// смерти. Второй слот даёт урок «невыученные уроки всё ещё не выучены»,
+	// выученный в прошлой жизни, поэтому в каркасе это просто число.
+	// По умолчанию (ноль) — один слот.
+	DeferredSlots int `json:"deferred_slots,omitempty"`
 	// Requirements — условия, которым обязан удовлетворять план
 	// (например, «контроль пола» ИЛИ «взять фолиант после определения пола»).
 	Requirements []Requirement `json:"requirements,omitempty"`
@@ -210,6 +215,7 @@ func (s *Skeleton) NewPlan(userID, title, emoji string) *Plan {
 		Accumulators: s.Accumulators,
 		Folios:       s.Folios,
 		Requirements: s.Requirements,
+		DeferredSlots: s.DeferredSlots,
 		Options:      Options{Decimals: true, Numbered: true},
 	}
 	p.Normalize()

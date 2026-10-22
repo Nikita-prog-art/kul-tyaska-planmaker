@@ -332,3 +332,99 @@ func TestFreshPlanShipsArrays(t *testing.T) {
 		}
 	}
 }
+
+// planFromPage достаёт JSON плана, который конструктор получает в kt-plan.
+func planFromPage(t *testing.T, body string) map[string]any {
+	t.Helper()
+	const marker = `id="kt-plan">`
+	i := strings.Index(body, marker)
+	if i < 0 {
+		t.Fatal("на странице нет kt-plan")
+	}
+	rest := body[i+len(marker):]
+	j := strings.Index(rest, "</script>")
+	if j < 0 {
+		t.Fatal("kt-plan не закрыт")
+	}
+	var p map[string]any
+	if err := json.Unmarshal([]byte(rest[:j]), &p); err != nil {
+		t.Fatalf("kt-plan не разобрался: %v", err)
+	}
+	return p
+}
+
+// TestLessonOrderSurvivesSave — порядок уроков расставляет игрок (кнопкой
+// «Разложить уроки по требованиям» или стрелками), и сервер сохраняет его как
+// есть: ничего не пересортировывает ни при сохранении, ни при отдаче страницы.
+func TestLessonOrderSurvivesSave(t *testing.T) {
+	c := newClient(t)
+	c.post("/register", url.Values{
+		"nick": {"order"}, "discord": {"@order"}, "password": {"verysecret1"}, "password2": {"verysecret1"},
+	})
+	resp := c.post("/plans", url.Values{"title": {"Порядок"}, "preset": {"08-zaskoruzlye-piramidy"}})
+	planURL := resp.Header.Get("Location")
+	if !strings.HasPrefix(planURL, "/plans/") {
+		t.Fatalf("план не создался: %q", planURL)
+	}
+	code, body := c.getBody(planURL)
+	if code != 200 {
+		t.Fatalf("конструктор: код %d", code)
+	}
+	loaded := planFromPage(t, body)
+
+	// Нарочно «неправильный» порядок: «пинг систем» (минимум десятым) идёт
+	// вторым, «ученье — свет!» (минимум четвёртым) — третьим.
+	// Обязательные позиции каркаса («поцелуй Мелисандры» и заплатка
+	// «отключение тренировок») остаются в плане — их место задано текстом.
+	loaded["picks"] = []map[string]any{
+		{"key": "lesson:poceluy_melisandry"},
+		{"key": "patch:otkluchenie_trenirovok"},
+		{"key": "lesson:ping_sistem"},
+		{"key": "lesson:uchene_svet"},
+	}
+	delete(loaded, "created_at")
+	delete(loaded, "updated_at")
+	raw, err := json.Marshal(loaded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp := c.post(planURL, url.Values{"state": {string(raw)}}); resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("сохранение: код %d", resp.StatusCode)
+	}
+
+	// Порядок вернулся тот же, что сохранили.
+	_, body = c.getBody(planURL)
+	saved := planFromPage(t, body)
+	picks, _ := saved["picks"].([]any)
+	var keys []string
+	for _, raw := range picks {
+		if m, ok := raw.(map[string]any); ok {
+			keys = append(keys, m["key"].(string))
+		}
+	}
+	if got := saved["deferred_slots"]; got != float64(2) {
+		t.Errorf("слоты невыученных потерялись при сохранении: %v, ждал 2", got)
+	}
+	want := []string{
+		"lesson:poceluy_melisandry", "patch:otkluchenie_trenirovok",
+		"lesson:ping_sistem", "lesson:uchene_svet",
+	}
+	if strings.Join(keys, ",") != strings.Join(want, ",") {
+		t.Fatalf("порядок уроков не сохранился: получил %v, ждал %v", keys, want)
+	}
+
+	// И в выгрузке уроки идут в этом порядке, с честной нумерацией.
+	resp = c.do("GET", planURL+"/export?format=txt", nil)
+	txt, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	text := string(txt)
+	for _, want := range []string{
+		"2. пинг систем: 10",
+		"3. ученье — свет!: 15",
+		"«пинг систем» требует минимум 10-й урок, а стоит 2-м",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("в выгрузке нет %q:\n%s", want, text)
+		}
+	}
+}

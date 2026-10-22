@@ -64,8 +64,27 @@ test('предупреждения про «минимум n-ным уроком
   const summary = KT.computeSummary(plan, sections);
   const text = summary.warnings.join('\n');
   assert.ok(text.includes('пинг систем'), 'ждём предупреждение про «пинг систем»');
-  assert.ok(summary.deferredLimit >= 1);
   assert.ok(summary.notTaken.length > 0, 'не взятые уроки попадают в «Не взято»');
+});
+
+test('слотов невыученных два: второй открыт в каркасе', () => {
+  assert.strictEqual(KT.computeSummary(plan, sections).deferredLimit, 2,
+    'урок «невыученные уроки всё ещё не выучены» она взяла раньше — слотов два');
+
+  const p = JSON.parse(JSON.stringify(plan));
+  p.deferred = [
+    { key: 'lesson:diletantka_shirokogo_profilya', slot: 1 },
+    { key: 'lesson:vodnoe_teloslozhenie', slot: 2 }
+  ];
+  let sum = KT.computeSummary(p, sections);
+  assert.strictEqual(sum.deferredUsed, 2);
+  assert.ok(!sum.warnings.some((w) => w.indexOf('слотов') >= 0),
+    'два отложенных урока влезают: ' + sum.warnings.join('; '));
+
+  p.deferred.push({ key: 'lesson:prodlenie_bitvy', slot: 3 });
+  sum = KT.computeSummary(p, sections);
+  assert.ok(sum.warnings.some((w) => w.indexOf('отложено уроков больше') >= 0),
+    'третий уже не влезает: ' + sum.warnings.join('; '));
 });
 
 test('отложенный урок бесплатный и без номера', () => {

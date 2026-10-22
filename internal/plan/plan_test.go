@@ -960,3 +960,72 @@ func TestSkeletonDropsBrokenRequires(t *testing.T) {
 		t.Errorf("битая ссылка осталась у фолианта: %v", sk.Folios[0].Requires)
 	}
 }
+
+// TestFolioRightsSeparate — право взять фолиант и право взять фолиант с доступом
+// на стадии Накопления Ци — две разные покупки (5 и 10 XP), их нельзя схлопнуть.
+func TestFolioRightsSeparate(t *testing.T) {
+	sk := presetSkeleton(t)
+	find := func(key string) *plan.ShopItem {
+		for i := range sk.Shop {
+			if sk.Shop[i].Key == key {
+				return &sk.Shop[i]
+			}
+		}
+		return nil
+	}
+	plain := find("folio:vzyat_1_foliant")
+	nakoplenie := find("folio:vzyat_1_foliant_nakoplenie")
+	if plain == nil || nakoplenie == nil {
+		t.Fatalf("в каркасе должны быть обе опции библиотеки: обычная=%v, на Накоплении Ци=%v", plain != nil, nakoplenie != nil)
+	}
+	if plain.Cost != 5 || !plain.Fixed || plain.Repeat != 3 {
+		t.Errorf("«взять 1 фолиант»: %v XP, fixed=%v, repeat=%d — ждал 5 XP и до трёх раз",
+			plain.Cost, plain.Fixed, plain.Repeat)
+	}
+	if nakoplenie.Cost != 10 || !nakoplenie.Fixed || nakoplenie.Repeat != 3 {
+		t.Errorf("«взять 1 фолиант на Накоплении Ци»: %v XP, fixed=%v, repeat=%d — ждал 10 XP и до трёх раз",
+			nakoplenie.Cost, nakoplenie.Fixed, nakoplenie.Repeat)
+	}
+	// В плане они считаются как две отдельные строки.
+	p := sk.NewPlan("u", "два права", "")
+	p.Picks = append(p.Picks, plan.Pick{Key: "folio:vzyat_1_foliant"}, plan.Pick{Key: "folio:vzyat_1_foliant_nakoplenie"})
+	sum := plan.Compute(p)
+	got := 0.0
+	for _, s := range sum.Sections {
+		if s.Key == plan.SecFolio {
+			got = s.Sum
+		}
+	}
+	if got != 15 {
+		t.Errorf("два права стоят 15 XP, посчиталось %v", got)
+	}
+}
+
+// TestDeferredSlots — слоты «невыученных» приходят из каркаса: в этом
+// посмертии их два (второй дал урок «невыученные уроки всё ещё не выучены»,
+// выученный в прошлой жизни), урок с тегом defer_slot добавляет ещё один.
+func TestDeferredSlots(t *testing.T) {
+	sk := presetSkeleton(t)
+	if sk.DeferredSlots != 2 {
+		t.Errorf("в каркасе жизни 8 два слота невыученных, получил %d", sk.DeferredSlots)
+	}
+	if got := plan.Compute(sk.NewPlan("u", "два слота", "")).DeferredLimit; got != 2 {
+		t.Errorf("план из каркаса: ждал 2 слота, получил %d", got)
+	}
+	// План без каркаса: слот по умолчанию один.
+	if got := plan.Compute(plan.EmptyPlan("u", "пустой", "", 100)).DeferredLimit; got != 1 {
+		t.Errorf("без каркаса слот один, получил %d", got)
+	}
+
+	raw := []byte(`{"name":"тест","balance":100,"shop":[
+		{"key":"lesson:a","kind":"lesson","section":"lessons","title":"а","tags":["defer_slot"]}]}`)
+	sk2, err := plan.ParseSkeleton(raw)
+	if err != nil {
+		t.Fatalf("каркас: %v", err)
+	}
+	p := sk2.NewPlan("u", "слот из урока", "")
+	p.Picks = append(p.Picks, plan.Pick{Key: "lesson:a"})
+	if got := plan.Compute(p).DeferredLimit; got != 2 {
+		t.Errorf("взятый урок с тегом defer_slot даёт второй слот, получил %d", got)
+	}
+}

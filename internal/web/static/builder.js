@@ -24,6 +24,7 @@
     if (!p.options || typeof p.options !== 'object') p.options = { decimals: true, numbered: true };
     p.balance = Number(p.balance) || 0;
     p.earned = Number(p.earned) || 0;
+    p.deferred_slots = Math.max(1, Number(p.deferred_slots) || 1);
     if (!p.title) p.title = 'Новый план';
     p.shop.forEach(function (it, i) {
       if (!it.key) it.key = (it.kind || 'item') + ':item' + i;
@@ -231,6 +232,7 @@
     plan.subtotal = Number(sk.subtotal) || 0;
     plan.multipliers = sk.multipliers || [];
     plan.requirements = sk.requirements || [];
+    plan.deferred_slots = Math.max(1, Number(sk.deferred_slots) || 1);
     if (sk.source) plan.source = sk.source;
     if (sk.notes) plan.notes = sk.notes;
 
@@ -289,7 +291,8 @@
       ladders: plan.ladders,
       accumulators: plan.accumulators,
       folios: plan.folios,
-      requirements: plan.requirements || []
+      requirements: plan.requirements || [],
+      deferred_slots: plan.deferred_slots || 1
     }, null, 2);
   }
 
@@ -591,6 +594,7 @@
         h('button', {
           class: 'btn ghost small', type: 'button', onclick: function () {
             sortPicks();
+            markDirty(); // порядок изменился — план надо сохранить
             render();
           }, text: 'Разложить уроки по требованиям'
         }),
@@ -1253,7 +1257,7 @@
       earned: plan.earned || 0, multipliers: plan.multipliers || [], source: plan.source || '',
       shop: plan.shop, picks: plan.picks, deferred: plan.deferred, not_taken: plan.not_taken,
       ladders: plan.ladders, accumulators: plan.accumulators, folios: plan.folios,
-      requirements: plan.requirements || []
+      requirements: plan.requirements || [], deferred_slots: plan.deferred_slots || 1
     };
     document.getElementById('kt-state').value = JSON.stringify(state);
     dirty = false;

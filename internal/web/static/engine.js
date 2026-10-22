@@ -50,8 +50,10 @@
     return !!(item && item.tags && item.tags.indexOf(tag) >= 0);
   }
 
+  // Слоты «невыученных»: сколько открыто в каркасе (deferred_slots) плюс
+  // по одному за каждый взятый урок с тегом defer_slot.
   function deferredLimit(plan, items) {
-    var limit = 1;
+    var limit = Math.max(1, Number(plan && plan.deferred_slots) || 1);
     (plan.picks || []).forEach(function (pk) {
       if (hasTag(items[pk.key], 'defer_slot')) limit++;
     });

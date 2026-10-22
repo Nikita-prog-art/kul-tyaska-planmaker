@@ -640,3 +640,57 @@ if (failures) {
   process.exit(1);
 }
 console.log('\nВсе проверки конструктора пройдены.');
+
+test('«Разложить уроки по требованиям» раскладывает уроки и просит сохранить', () => {
+  // Уроки стоят как попало: «пинг систем» (минимум 10-м) раньше «ученья — свет!»
+  // (минимум 4-м), «прирождённого алхимика» (6-м) и «дилетантки» (7-м).
+  const p = JSON.parse(JSON.stringify(plan));
+  p.picks = [
+    { key: 'lesson:poceluy_melisandry' },
+    { key: 'lesson:ping_sistem' },
+    { key: 'lesson:uchene_svet' },
+    { key: 'lesson:prirozhdennyy_alhimik' },
+    { key: 'lesson:da_sdohni_zhe' },
+    { key: 'lesson:metod_neproglyadnogo_tumana' },
+    { key: 'lesson:posledniy_boy' },
+    { key: 'lesson:sama_sebe_bezoar' },
+    { key: 'lesson:diletantka_shirokogo_profilya' },
+    { key: 'lesson:maksimum_zaradov_gorozhan' },
+    { key: 'lesson:skorost_zaradki_gorozhan' }
+  ];
+  p.deferred = [];
+  p.not_taken = p.not_taken.filter((k) => k !== 'lesson:diletantka_shirokogo_profilya');
+  // Отметки накопителей и фолиантов снимаем: в этом плане их нечем заслужить,
+  // а снятая отметка сама по себе пометила бы план несохранённым.
+  p.accumulators.forEach((a) => { a.activate = false; });
+  p.folios.forEach((f) => { f.take = false; });
+  const w = bootPage(p);
+  const d = w.document;
+  assert.strictEqual(d.getElementById('kt-dirty').hidden, true, 'до сортировки сохранять нечего');
+
+  const btn = Array.prototype.find.call(d.querySelectorAll('#sec-lessons .sec-tools button'),
+    (b) => /Разложить/.test(b.textContent));
+  assert.ok(btn, 'кнопка «Разложить уроки по требованиям» на месте');
+  btn.click();
+
+  assert.strictEqual(d.getElementById('kt-dirty').hidden, false, 'план помечен несохранённым — иначе порядок потеряется');
+
+  w.HTMLFormElement.prototype.submit = function () { w.__state = d.getElementById('kt-state').value; };
+  d.querySelector('.toolbar .btn:not(.ghost)').click(); // «Сохранить»
+  const st = JSON.parse(w.__state);
+  assert.deepStrictEqual(KT.computeSummary(st, sections).warnings.filter((x) => /минимум/.test(x)), [],
+    'после раскладки нарушений «минимум n-ным» нет');
+  const at = (key) => st.picks.findIndex((x) => x.key === key);
+  assert.ok(at('lesson:uchene_svet') < at('lesson:diletantka_shirokogo_profilya'), '«ученье» (4-м) раньше «дилетантки» (7-м)');
+  assert.ok(at('lesson:diletantka_shirokogo_profilya') < at('lesson:ping_sistem'), '«дилетантка» (7-м) раньше «пинг систем» (10-м)');
+});
+
+test('слотов невыученных в каркасе два', () => {
+  const d = bootPage(JSON.parse(JSON.stringify(plan))).document;
+  const slots = d.getElementById('sum-slots');
+  assert.ok(slots, 'счётчик слотов на месте');
+  assert.strictEqual(slots.textContent.trim(), 'слоты невыученных: 1 / 2',
+    'в каркасе открыто два слота, один занят');
+  assert.strictEqual(JSON.parse(d.getElementById('kt-plan').textContent).deferred_slots, 2,
+    'план помнит, сколько слотов открыто');
+});

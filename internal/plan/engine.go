@@ -133,7 +133,13 @@ func Compute(p *Plan) *Summary {
 	}
 
 	// Отложенные уроки: попадают в план бесплатно, но не нумеруются.
-	deferredLimit := 1
+	// Слоты приходят из каркаса (второй слот даёт урок «невыученные уроки
+	// всё ещё не выучены», выученный в прошлой жизни), а взятый сейчас урок
+	// с тегом defer_slot добавляет ещё один.
+	deferredLimit := p.DeferredSlots
+	if deferredLimit < 1 {
+		deferredLimit = 1
+	}
 	for _, pick := range p.Picks {
 		if item := p.Item(pick.Key); item != nil && hasTag(item, "defer_slot") {
 			deferredLimit++

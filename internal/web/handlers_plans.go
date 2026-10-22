@@ -123,6 +123,8 @@ type saveState struct {
 	Accumulators []plan.Accumulator `json:"accumulators"`
 	Folios       []plan.Folio       `json:"folios"`
 	Requirements []plan.Requirement `json:"requirements"`
+	// DeferredSlots — сколько слотов «невыученных» открыто в каркасе.
+	DeferredSlots int `json:"deferred_slots"`
 }
 
 func (s *Server) handlePlanSave(w http.ResponseWriter, r *http.Request) {
@@ -171,6 +173,9 @@ func (s *Server) handlePlanSave(w http.ResponseWriter, r *http.Request) {
 	}
 	if st.Requirements != nil {
 		p.Requirements = st.Requirements
+	}
+	if st.DeferredSlots > 0 {
+		p.DeferredSlots = st.DeferredSlots
 	}
 	// Обязательные позиции каркаса доставляются в план (см. plan.Normalize).
 	p.Normalize()
