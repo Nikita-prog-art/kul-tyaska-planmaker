@@ -2,8 +2,10 @@
 package web
 
 import (
+	"crypto/sha256"
 	"embed"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -28,11 +30,12 @@ const Version = "0.1.0"
 
 // Server — приложение.
 type Server struct {
-	cfg  config.Config
-	st   *store.Store
-	tpl  map[string]*exec.Template
-	dev  bool
-	year string
+	cfg    config.Config
+	st     *store.Store
+	tpl    map[string]*exec.Template
+	dev    bool
+	year   string
+	assets string // версия статики: сбрасывает кэш браузера после выкладки
 }
 
 type ctxKey string
@@ -43,11 +46,34 @@ const (
 
 // New создаёт сервер и загружает шаблоны.
 func New(cfg config.Config, st *store.Store) (*Server, error) {
-	s := &Server{cfg: cfg, st: st, year: fmt.Sprintf("%d", time.Now().Year())}
+	s := &Server{cfg: cfg, st: st, year: fmt.Sprintf("%d", time.Now().Year()), assets: staticVersion()}
 	if err := s.loadTemplates(); err != nil {
 		return nil, err
 	}
 	return s, nil
+}
+
+// staticVersion — короткий отпечаток встроенной статики. Ссылки в шаблонах
+// идут как /static/…?v=<отпечаток>: браузер не залипает на старом builder.js
+// после выкладки, хотя файлы отдаются с часовым кэшем.
+func staticVersion() string {
+	h := sha256.New()
+	entries, err := fs.ReadDir(assets, "static")
+	if err != nil {
+		return Version
+	}
+	for _, e := range entries { // ReadDir сортирует по имени — отпечаток стабилен
+		if e.IsDir() {
+			continue
+		}
+		data, err := fs.ReadFile(assets, "static/"+e.Name())
+		if err != nil {
+			continue
+		}
+		_, _ = h.Write([]byte(e.Name()))
+		_, _ = h.Write(data)
+	}
+	return hex.EncodeToString(h.Sum(nil))[:10]
 }
 
 func (s *Server) loadTemplates() error {
@@ -186,6 +212,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 	u := userFrom(r.Context())
 	data["user"] = userMap(u)
 	data["version"] = Version
+	data["assets"] = s.assets
 	data["year"] = s.year
 	data["flash"] = s.popFlash(w, r)
 	data["path"] = r.URL.Path
@@ -197,6 +224,9 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 	}
 	ctx := exec.NewContext(data)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// Страницы личные и меняются от выкладки к выкладке: без no-store браузер
+	// мог бы показать старую вёрстку со ссылками на старую статику.
+	w.Header().Set("Cache-Control", "no-store")
 	if err := tpl.Execute(w, ctx); err != nil {
 		log.Printf("шаблон %s: %v", name, err)
 	}

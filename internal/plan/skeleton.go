@@ -203,20 +203,20 @@ func (s *Skeleton) NewPlan(userID, title, emoji string) *Plan {
 	}
 	p := &Plan{
 		ID: newID(), UserID: userID, Title: title, Emoji: emoji,
-		Balance:      s.Balance,
-		Skeleton:     s.Name,
-		Earned:       s.Earned,
-		Subtotal:     s.Subtotal,
-		Mults:        s.Multipliers,
-		Source:       s.Source,
-		Notes:        s.Notes,
-		Shop:         s.Shop,
-		Ladders:      s.Ladders,
-		Accumulators: s.Accumulators,
-		Folios:       s.Folios,
-		Requirements: s.Requirements,
+		Balance:       s.Balance,
+		Skeleton:      s.Name,
+		Earned:        s.Earned,
+		Subtotal:      s.Subtotal,
+		Mults:         s.Multipliers,
+		Source:        s.Source,
+		Notes:         s.Notes,
+		Shop:          s.Shop,
+		Ladders:       s.Ladders,
+		Accumulators:  s.Accumulators,
+		Folios:        s.Folios,
+		Requirements:  s.Requirements,
 		DeferredSlots: s.DeferredSlots,
-		Options:      Options{Decimals: true, Numbered: true},
+		Options:       Options{Decimals: true, Numbered: true},
 	}
 	p.Normalize()
 	return p

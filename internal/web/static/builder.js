@@ -593,13 +593,24 @@
       sec.key === 'lessons' ? h('div', { class: 'sec-tools' }, [
         h('button', {
           class: 'btn ghost small', type: 'button', onclick: function () {
-            sortPicks();
-            markDirty(); // порядок изменился — план надо сохранить
+            var moved = sortPicks();
+            if (moved) markDirty(); // порядок изменился — план надо сохранить
             render();
+            var hint = document.querySelector('#sec-lessons .sec-tools .sort-hint');
+            if (!hint) return;
+            hint.classList.remove('warn-live');
+            if (moved) {
+              hint.textContent = 'порядок разложен — не забудь сохранить план';
+            } else if (hasMinViolation()) {
+              hint.textContent = 'разложить не выходит: уроков меньше, чем требует «минимум n-ным»';
+              hint.classList.add('warn-live');
+            } else {
+              hint.textContent = 'менять нечего: порядок уже подходит под «минимум n-ным»';
+            }
           }, text: 'Разложить уроки по требованиям'
         }),
         h('span', {
-          class: 'muted small' + (hasMinViolation() ? ' warn-live' : ''),
+          class: 'muted small sort-hint' + (hasMinViolation() ? ' warn-live' : ''),
           text: hasMinViolation()
             ? 'есть уроки раньше своего «минимум n-ным» — нажми, чтобы разложить'
             : 'сортирует выбранные уроки так, чтобы «минимум n-ным» выполнялось'
@@ -908,22 +919,37 @@
     return pickIndex(it.key) > ref ? 'got' : 'lost';
   }
 
-  /* sortPicks — раскладка уроков: сначала уже оплаченные (их место задано
-     текстом), дальше по требованию «минимум n-ным», затем по порядку магазина. */
+  /* sortPicks — раскладка уроков по требованию «минимум n-ным».
+     Нумеруемые уроки (кроме «уже взято», с фиксированной ценой и отложенных)
+     занимают свои места в очереди так, чтобы требования выполнялись: первым
+     идёт самый нетребовательный, последним — тот, что просит наибольший номер.
+     Остальные позиции (обязательные, фиксированные, отложенные) не двигаем.
+     Возвращает true, если порядок изменился. */
   function sortPicks() {
-    var meta = {};
-    plan.shop.forEach(function (it) { meta[it.key] = it; });
-    var order = {};
-    plan.shop.forEach(function (it, i) { order[it.key] = i; });
-    plan.picks.sort(function (a, b) {
-      var A = meta[a.key] || {}, B = meta[b.key] || {};
-      if (!!A.already_paid !== !!B.already_paid) return A.already_paid ? -1 : 1;
-      if (A.kind === 'lesson' && B.kind === 'lesson' && !A.fixed && !B.fixed) {
-        var ma = A.min_lesson || 1, mb = B.min_lesson || 1;
-        if (ma !== mb) return ma - mb;
-        return (order[a.key] || 0) - (order[b.key] || 0);
-      }
-      return 0;
+    // Раскладывать есть смысл, только когда что-то стоит раньше своего
+    // «минимум n-ным»: иначе повторный клик тасовал бы уроки без причины.
+    if (!hasMinViolation()) return false;
+    var before = plan.picks.map(function (pk) { return pk.key; }).join('\n');
+    var slots = [];   // места в очереди, которые занимают нумеруемые уроки
+    var movers = [];  // сами эти покупки
+    plan.picks.forEach(function (pk, i) {
+      var it = item(pk.key);
+      if (!it || it.kind !== 'lesson') return;
+      if (it.fixed || it.already_paid || isDeferred(it.key)) return;
+      slots.push(i);
+      movers.push({ pick: pk, it: it, at: i });
+    });
+    movers.sort(function (a, b) {
+      var ma = a.it.min_lesson || 1, mb = b.it.min_lesson || 1;
+      if (ma !== mb) return mb - ma; // самые требовательные — в конец
+      // при равных требованиях сохраняем то, как уроки стоят сейчас: иначе
+      // повторный клик снова перетасовал бы их и кнопка «не работала» бы
+      return b.at - a.at;
+    });
+    // movers отсортированы от самого требовательного: он встаёт в последнее
+    // место, а первое достаётся самому нетребовательному.
+    slots.forEach(function (pos, k) {
+      plan.picks[pos] = movers[movers.length - 1 - k].pick;
     });
     // Награда за порядок важнее «минимума»: если урок должен идти после другого,
     // ставим его сразу за ним, иначе награда потеряется.
@@ -932,6 +958,8 @@
       if (pickIndex(it.key) < 0 || pickIndex(it.reward_after.key) < 0) return;
       if (pickIndex(it.key) < pickIndex(it.reward_after.key)) placeAfter(it.key, it.reward_after.key);
     });
+    var after = plan.picks.map(function (pk) { return pk.key; }).join('\n');
+    return before !== after;
   }
 
   // --- пересчёт ---------------------------------------------------------

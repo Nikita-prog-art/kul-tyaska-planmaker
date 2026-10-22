@@ -694,3 +694,73 @@ test('слотов невыученных в каркасе два', () => {
   assert.strictEqual(JSON.parse(d.getElementById('kt-plan').textContent).deferred_slots, 2,
     'план помнит, сколько слотов открыто');
 });
+
+test('«Разложить уроки» не спотыкается о фиксированные уроки и отложенные', () => {
+  // Так выглядит живой план: между нумеруемыми уроками стоят фиксированные
+  // («фиксированная цена», «трофей», «освоено»), а два урока отложены
+  // невыученными. Раскладывать надо только нумеруемые и не трогать остальные.
+  const p = JSON.parse(JSON.stringify(plan));
+  p.picks = [
+    { key: 'lesson:poceluy_melisandry' },
+    { key: 'patch:otkluchenie_trenirovok' },
+    { key: 'lesson:da_sdohni_zhe' },
+    { key: 'lesson:prirozhdennyy_alhimik' },
+    { key: 'lesson:diletantka_shirokogo_profilya' },
+    { key: 'lesson:ping_sistem' },
+    { key: 'lesson:professionalnaya_deva' },
+    { key: 'lesson:nenavizhu_yady' },
+    { key: 'lesson:prodlenie_bitvy' },
+    { key: 'lesson:posledniy_boy' },
+    { key: 'lesson:povyshenie_chistoty_korney' },
+    { key: 'lesson:metod_ognennogo_vodopada' },
+    { key: 'lesson:metod_neproglyadnogo_tumana' },
+    { key: 'lesson:metod_tonkogo_pogloscheniya' },
+    { key: 'lesson:maksimum_zaradov_gorozhan' },
+    { key: 'lesson:skorost_zaradki_gorozhan' }
+  ];
+  p.deferred = [{ key: 'lesson:sama_sebe_bezoar', slot: 1 }, { key: 'lesson:uchene_svet', slot: 2 }];
+  p.not_taken = [];
+  p.accumulators.forEach((a) => { a.activate = false; });
+  p.folios.forEach((f) => { f.take = false; });
+  const w = bootPage(p);
+  const d = w.document;
+
+  const before = KT.computeSummary(JSON.parse(JSON.stringify(p)), sections)
+    .warnings.filter((x) => /минимум/.test(x));
+  assert.strictEqual(before.length, 3, 'до раскладки три нарушения: ' + before.join(' / '));
+
+  const btn = Array.prototype.find.call(d.querySelectorAll('#sec-lessons .sec-tools button'), (b) => /Разложить/.test(b.textContent));
+  btn.click();
+
+  const hint = d.querySelector('#sec-lessons .sec-tools .sort-hint');
+  assert.ok(/порядок разложен/.test(hint.textContent), 'кнопка говорит, что порядок разложен: ' + hint.textContent);
+
+  w.HTMLFormElement.prototype.submit = function () { w.__state = d.getElementById('kt-state').value; };
+  d.querySelector('.toolbar .btn:not(.ghost)').click(); // «Сохранить»
+  const st = JSON.parse(w.__state);
+  const sum = KT.computeSummary(st, sections);
+  assert.deepStrictEqual(sum.warnings.filter((x) => /минимум/.test(x)), [],
+    'после раскладки нарушений «минимум n-ным» нет');
+  assert.deepStrictEqual(sum.warnings.filter((x) => /не получена/.test(x)), [],
+    'награда «последний бой» не потерялась');
+
+  const at = (key) => st.picks.findIndex((x) => x.key === key);
+  assert.ok(at('lesson:prirozhdennyy_alhimik') < at('lesson:diletantka_shirokogo_profilya'),
+    '«прирождённый алхимик» (6-м) раньше «дилетантки» (7-м)');
+  assert.ok(at('lesson:diletantka_shirokogo_profilya') < at('lesson:ping_sistem'),
+    '«дилетантка» (7-м) раньше «пинг систем» (10-м)');
+  assert.ok(at('lesson:ping_sistem') < at('lesson:posledniy_boy'),
+    '«последний бой» идёт после «пинг систем» — награда за порядок');
+  // Обязательная заплатка осталась на своём месте, а урок с фиксированной
+  // ценой так и не получил номера — его не раскладывали.
+  assert.strictEqual(at('patch:otkluchenie_trenirovok'), 1, 'обязательная заплатка не сдвинулась');
+  const deva = sum.sections.filter((s) => s.key === 'lessons')[0].lines
+    .filter((l) => l.key === 'lesson:professionalnaya_deva')[0];
+  assert.ok(deva && deva.fixed && !deva.number,
+    'урок с фиксированной ценой номера не получил: ' + JSON.stringify(deva));
+
+  // Повторный клик: менять нечего, и это видно.
+  btn.click();
+  const again = d.querySelector('#sec-lessons .sec-tools .sort-hint');
+  assert.ok(/менять нечего/.test(again.textContent), 'повторная раскладка говорит, что менять нечего: ' + again.textContent);
+});

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -427,4 +428,58 @@ func TestLessonOrderSurvivesSave(t *testing.T) {
 			t.Errorf("в выгрузке нет %q:\n%s", want, text)
 		}
 	}
+}
+
+// TestStaticAssetsVersioned — ссылки на статику идут с отпечатком содержимого:
+// файлы отдаются с часовым кэшем, и без ?v= браузер после выкладки продолжал
+// бы запускать старый builder.js (кнопки «не работают», хотя сервер новый).
+func TestStaticAssetsVersioned(t *testing.T) {
+	c := newClient(t)
+	versions := map[string]string{}
+	for _, page := range []string{"/", "/login", "/guide"} {
+		code, body := c.getBody(page)
+		if code != 200 {
+			t.Fatalf("%s: код %d", page, code)
+		}
+		m := assetVersionRE.FindStringSubmatch(body)
+		if m == nil {
+			t.Fatalf("%s: ссылка на /static/app.css без ?v=:\n%s", page, firstLines(body, 12))
+		}
+		versions[page] = m[1]
+	}
+	for page, v := range versions {
+		if v != versions["/"] {
+			t.Errorf("%s: отпечаток %q, на главной %q — должен быть один на всю сборку", page, v, versions["/"])
+		}
+	}
+
+	// Страница не кэшируется: иначе после выкладки браузер показал бы старые
+	// ссылки на статику, и новые кнопки снова «не работали» бы.
+	resp := c.do("GET", "/", nil)
+	_, _ = io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+	if got := resp.Header.Get("Cache-Control"); got != "no-store" {
+		t.Errorf("страницы кэшируются (Cache-Control: %q), ждал no-store", got)
+	}
+
+	// Сам файл по-прежнему отдаётся, и это именно текущий конструктор.
+	resp = c.do("GET", "/static/builder.js", nil)
+	raw, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("builder.js: код %d", resp.StatusCode)
+	}
+	if !strings.Contains(string(raw), "Разложить уроки по требованиям") {
+		t.Error("в builder.js нет кнопки раскладки уроков")
+	}
+}
+
+var assetVersionRE = regexp.MustCompile(`/static/app\.css\?v=([0-9a-f]+)`)
+
+func firstLines(s string, n int) string {
+	lines := strings.Split(s, "\n")
+	if len(lines) > n {
+		lines = lines[:n]
+	}
+	return strings.Join(lines, "\n")
 }
