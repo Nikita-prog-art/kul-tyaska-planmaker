@@ -4,6 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ title }} · Культяшка</title>
+<script>
+/* Тему ставим до отрисовки, чтобы не мигала светлым на тёмной системе. */
+(function () {
+  try {
+    var t = localStorage.getItem('kt-theme');
+    if (t !== 'light' && t !== 'dark') {
+      t = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    }
+    document.documentElement.setAttribute('data-theme', t);
+  } catch (e) {
+    document.documentElement.setAttribute('data-theme', 'dark');
+  }
+})();
+</script>
 <link rel="stylesheet" href="/static/app.css?v={{ assets }}">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🩸</text></svg>">
 </head>
@@ -24,6 +38,7 @@
       <a href="/login" class="{% if nav == 'login' %}active{% endif %}">Вход</a>
       <a class="btn" href="/register">Регистрация</a>
     {% endif %}
+    <button class="theme-toggle" id="kt-theme" type="button" title="Светлая тема" aria-label="Светлая тема">☀️</button>
   </nav>
 </header>
 
@@ -38,6 +53,7 @@
   <span>Культивируй. Умри. Начни сначала.</span>
   <span>v{{ version }} · {{ year }}</span>
 </footer>
+<script src="/static/theme.js?v={{ assets }}"></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

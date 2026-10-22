@@ -18,5 +18,8 @@ node tests/engine.test.js
 echo "== конструктор в jsdom =="
 node tests/builder.test.js
 
+echo "== переключатель темы =="
+node tests/theme.test.js
+
 echo
 echo "Всё зелёное."

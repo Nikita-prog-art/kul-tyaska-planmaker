@@ -483,3 +483,43 @@ func firstLines(s string, n int) string {
 	}
 	return strings.Join(lines, "\n")
 }
+
+// TestThemeSwitchInMarkup — переключатель темы есть на каждой странице, тему
+// ставит ранний скрипт (до стилей, чтобы не мигало белым), а theme.js подключён
+// с тем же отпечатком, что и остальная статика.
+func TestThemeSwitchInMarkup(t *testing.T) {
+	c := newClient(t)
+	for _, page := range []string{"/", "/login", "/guide"} {
+		code, body := c.getBody(page)
+		if code != 200 {
+			t.Fatalf("%s: код %d", page, code)
+		}
+		for _, want := range []string{
+			`id="kt-theme"`,
+			`/static/theme.js?v=`,
+			`localStorage.getItem('kt-theme')`,
+			`prefers-color-scheme: light`,
+		} {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s: нет %q", page, want)
+			}
+		}
+		// Ранний скрипт должен стоять до таблицы стилей.
+		script := strings.Index(body, `localStorage.getItem('kt-theme')`)
+		css := strings.Index(body, `/static/app.css?v=`)
+		if script < 0 || css < 0 || script > css {
+			t.Errorf("%s: тема ставится после стилей — страница мигнёт светлым", page)
+		}
+	}
+
+	// theme.js отдаётся и переключает тему.
+	resp := c.do("GET", "/static/theme.js", nil)
+	raw, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("theme.js: код %d", resp.StatusCode)
+	}
+	if !strings.Contains(string(raw), "kt-theme") {
+		t.Error("в theme.js нет переключателя темы")
+	}
+}
