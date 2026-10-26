@@ -538,6 +538,38 @@ test('галочки накопителей не растягиваются на
   assert.strictEqual(field.padding, '9px 12px', 'и со своими отступами: ' + field.padding);
 });
 
+test('покупка не сбрасывает прокрутку правой панели', () => {
+  const d = bootPage(JSON.parse(JSON.stringify(plan))).document;
+  const side = d.querySelector('.sidebar');
+  assert.ok(side, 'панель на месте');
+  side.scrollTop = 240;
+
+  // Покупка, из-за которой меняется список отметок: «равновесие зла и добра»
+  // до покупки заперто, после — становится доступным.
+  rowByTitleIn(d, 'равновесие зла и добра').querySelector('[data-act="pick"]').click();
+  assert.strictEqual(d.querySelector('.sidebar').scrollTop, 240, 'прокрутка осталась на месте');
+});
+
+test('покупка накопителя не ставит галочку «активирую» сама', () => {
+  const p = JSON.parse(JSON.stringify(plan));
+  p.picks = p.picks.filter((x) => x.key !== 'item:hardkor');
+  p.accumulators.forEach((a) => { if (a.name.indexOf('хардкор') >= 0) a.activate = false; });
+  const d = bootPage(p).document;
+
+  assert.strictEqual(attachByRe(d, /хардкор/).querySelector('input').checked, false, 'до покупки не отмечен');
+  pickIn(d, 'накопитель «хардкор»');
+
+  const box = attachByRe(d, /хардкор/);
+  assert.strictEqual(box.querySelector('input').disabled, false, 'после покупки накопитель доступен');
+  assert.strictEqual(box.querySelector('input').checked, false, 'но покупка не включает его за игрока');
+  assert.ok(!/активирую: хардкор/.test(d.getElementById('kt-export-text').value),
+    'в выгрузке нет «активирую», пока игрок не поставил галочку');
+
+  // Поставил сам — отметка работает как раньше.
+  box.querySelector('input').click();
+  assert.strictEqual(attachByRe(d, /хардкор/).querySelector('input').checked, true, 'ручная отметка ставится');
+});
+
 test('накопители и фолианты отмечаются отдельно от магазина', () => {
   const d = bootPage(JSON.parse(JSON.stringify(plan))).document;
   const card = d.querySelector('#kt-attach');

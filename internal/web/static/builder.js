@@ -177,7 +177,10 @@
     });
   }
 
-  /* syncLegacySections — держим разделы плана в согласии с магазином. */
+  /* syncLegacySections — держим разделы плана в согласии с магазином:
+     купленный накопитель должен появиться в списке, чтобы не потеряться
+     при сохранении. Отметку «активирую» ставит только сам игрок: покупка
+     накопитель в план добавляет, но не включает. */
   function syncLegacySections(key) {
     var it = item(key);
     if (!it) return;
@@ -190,8 +193,14 @@
     plan.accumulators.forEach(function (a) {
       if (a.key === key || a.name === name) found = a;
     });
-    if (found) { found.activate = true; return; }
-    plan.accumulators.push({ key: key, name: name, activate: true, charges: 0, max: 0, rate: 0 });
+    if (found) return;
+    // Ключ берём из effects покупки: тогда её заряд, максимум и скорость
+    // сразу попадут в нужный накопитель, а не в безымянную строку.
+    var accKey = key;
+    (it.effects || []).forEach(function (e) {
+      if (e && e.accumulator) accKey = e.accumulator;
+    });
+    plan.accumulators.push({ key: accKey, name: name, activate: false, charges: 0, max: 0, rate: 0 });
   }
 
   /* accumulatorName убирает из названия покупки слово «накопитель». */
@@ -318,6 +327,10 @@
     // Отметки «активирую» и «беру» план обязан заслужить: если покупку сняли,
     // незаряженный накопитель или невыкупленный фолиант перестают быть отмеченными.
     if (KT.pruneAttachments(plan) > 0) markDirty();
+    // Пересборка страницы не должна сбрасывать прокрутку правой панели:
+    // покупка, от которой меняется список отметок, — не повод прыгать наверх.
+    var side = builder.querySelector('.sidebar');
+    var sideTop = side ? side.scrollTop : 0;
     builder.textContent = '';
     builder.appendChild(renderToolbar());
     var grid = h('div', { class: 'builder-grid' }, [
@@ -327,6 +340,8 @@
     builder.appendChild(grid);
     builder.appendChild(renderImportPanel());
     builder.appendChild(renderExportModal());
+    var nextSide = builder.querySelector('.sidebar');
+    if (nextSide) nextSide.scrollTop = sideTop;
     recompute();
     if (filter) applyFilter(filter);
   }
