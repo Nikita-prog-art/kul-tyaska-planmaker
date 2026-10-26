@@ -76,7 +76,7 @@
     (plan.picks || []).forEach(function (pk) {
       var it = items[pk.key];
       if (!it || it.kind !== 'lesson' || deferredKeys[pk.key]) return;
-      var line = { key: it.key, title: it.title, fixed: !!it.fixed, cost: 0, number: 0 };
+      var line = { key: it.key, title: it.title, short: itemShort(it), fixed: !!it.fixed, cost: 0, number: 0 };
       var section = 'lessons';
       if (it.fixed) {
         // Фиксированная цена — отдельный раздел: номер такие уроки не занимают.
@@ -131,7 +131,7 @@
       if (!it) return;
       if (it.no_defer) warnings.push('«' + it.title + '» нельзя отложить невыученными уроками');
       (bySection.lessons = bySection.lessons || []).push({
-        key: it.key, title: it.title, deferred: true, cost: 0, number: 0,
+        key: it.key, title: it.title, short: itemShort(it), deferred: true, cost: 0, number: 0,
         note: 'невыученный, в следующую жизнь'
       });
     });
@@ -147,7 +147,7 @@
       total += cost;
       var sec = it.section || 'other';
       (bySection[sec] = bySection[sec] || []).push({
-        key: it.key, title: it.title, cost: cost, qty: qty,
+        key: it.key, title: it.title, short: itemShort(it), cost: cost, qty: qty,
         note: it.already_paid ? 'уже куплено' : (it.price || '')
       });
     });
@@ -160,7 +160,7 @@
       total += cost;
       var sec = l.section || 'other';
       (bySection[sec] = bySection[sec] || []).push({
-        key: l.key, title: ladderTitle(l), cost: cost, ladder: true
+        key: l.key, title: ladderTitle(l), short: shortLadderTitle(l), cost: cost, ladder: true
       });
     });
 
@@ -202,7 +202,7 @@
     (plan.deferred || []).forEach(function (d) { taken[d.key] = true; });
     var notTaken = (plan.not_taken || []).map(function (k) {
       var it = items[k];
-      return it ? { key: it.key, title: it.title } : null;
+      return it ? { key: it.key, title: it.title, short: itemShort(it) } : null;
     }).filter(Boolean);
 
     return {
@@ -217,6 +217,20 @@
     var val = number(l.value);
     if (l.unit === 'd') return l.title + ': d' + val;
     return l.title + ': ' + val + (l.unit || '');
+  }
+
+  /* shortLadderTitle — шкала в выгрузке: короткое название и значение через
+     пробел, «корни мин 50%» (как в Go). */
+  function shortLadderTitle(l) {
+    var val = number(l.value);
+    var name = l.short || l.title;
+    if (l.unit === 'd') return name + ' d' + val;
+    return name + ' ' + val + (l.unit || '');
+  }
+
+  /* itemShort — название позиции для выгрузки: короткое, если оно есть. */
+  function itemShort(it) {
+    return (it && (it.short || it.title)) || '';
   }
 
   function picked(plan, key) {
@@ -408,7 +422,9 @@
     return note ? ' (' + note + ')' : '';
   }
 
-  /* renderExport(plan, summary, sections) — текст плана в принятом формате. */
+  /* renderExport(plan, summary, sections) — текст плана в принятом формате:
+     по одной строке на раздел, короткие названия, без памяток и заметок.
+     Внутри строк переносов нет: их делает тот, кто читает текст. */
   function renderExport(plan, summary, sections) {
     var dec = !!(plan.options && plan.options.decimals);
     var out = [];
@@ -422,28 +438,11 @@
     }
 
     (summary.sections || []).forEach(function (sec) {
-      // Уроки идут одной строкой: «1. поцелуй Мелисандры: 5, 2. …».
-      if (sec.key === 'lessons') {
-        var parts = sec.lines.filter(function (l) { return l.number > 0; }).map(function (l) {
-          return l.number + '. ' + l.title + ': ' + fmt(l.cost, dec) + noteSuffix(l.note);
-        });
-        if (!parts.length) return;
-        out.push(sec.title + ': ' + parts.join(', '));
-        out.push('  Сумма: ' + fmt(sec.sum, dec) + ', ост. ' + fmt(sec.remainder, dec));
-        out.push('');
-        return;
-      }
-      out.push(sec.title + ':');
-      sec.lines.forEach(function (l) {
-        var title = l.qty > 1 ? l.title + ' ×' + l.qty : l.title;
-        if (l.deferred) {
-          out.push('  - ' + title + ' (' + (l.note || 'невыученный, в следующую жизнь') + ')');
-        } else if (l.number > 0) {
-          out.push('  ' + l.number + '. ' + title + ': ' + fmt(l.cost, dec) + noteSuffix(l.note));
-        } else {
-          out.push('  - ' + title + ': ' + fmt(l.cost, dec) + noteSuffix(l.note));
-        }
+      var parts = sec.lines.filter(function (l) { return !l.deferred; }).map(function (l) {
+        return lineText(l, dec);
       });
+      if (!parts.length) return;
+      out.push(sec.title + ': ' + parts.join(', '));
       out.push('  Сумма: ' + fmt(sec.sum, dec) + ', ост. ' + fmt(sec.remainder, dec));
       out.push('');
     });
@@ -454,7 +453,7 @@
     (plan.accumulators || []).forEach(function (a) {
       if (!a.activate) return;
       // Если про заряды накопителя в тексте ничего нет, печатаем только имя.
-      var line = a.name;
+      var line = a.short || a.name;
       if (accumulatorKnown(plan, a)) {
         var v = accumulatorValues(plan, a);
         line += ' (' + number(v.charges) + '/' + number(v.max);
@@ -464,53 +463,49 @@
       act.push(line);
     });
     if (act.length) {
-      out.push('Активация накопителей:');
-      out.push('  - активирую: ' + act.join('; '));
+      out.push('Активация накопителей: ' + act.join(', '));
       out.push('');
     }
 
     var take = [];
     (plan.folios || []).forEach(function (f) {
       if (!f.take) return;
-      take.push(f.name + (f.note ? ' (' + f.note + ')' : ''));
+      take.push((f.short || f.name) + (f.note ? ' (' + f.note + ')' : ''));
     });
     if (take.length) {
-      out.push('Фолианты:');
-      out.push('  - беру с собой: ' + take.join('; '));
+      out.push('Беру с собой: ' + take.join(', '));
       out.push('');
     }
 
     var items = itemMap(plan);
     var deferredNames = (plan.deferred || []).map(function (d) {
-      return items[d.key] ? items[d.key].title : null;
+      var it = items[d.key];
+      return it ? itemShort(it) : null;
     }).filter(Boolean);
     out.push('Невыученные: ' + (deferredNames.length ? deferredNames.join(', ') : '—'));
     out.push('');
 
     if (summary.notTaken.length) {
-      out.push('Не взято: ' + summary.notTaken.map(function (l) { return l.title; }).join(', '));
+      out.push('Не взято: ' + summary.notTaken.map(function (l) { return l.short || l.title; }).join(', '));
       out.push('');
     }
 
     if (summary.warnings.length) {
-      out.push('Проверки:');
-      summary.warnings.forEach(function (w) { out.push('  ! ' + w); });
-      out.push('');
-    }
-
-    // Условия, которые касаются будущих жизней: памятка, а не проверка плана.
-    if ((summary.future || []).length) {
-      out.push('На будущие жизни:');
-      summary.future.forEach(function (f) {
-        out.push('  - ' + String(f.text).trim() + (f.met ? ' — выполнено' : ' — пока не выполнено'));
-      });
+      out.push('Проверки: ' + summary.warnings.join('; '));
       out.push('');
     }
 
     out.push('Итого потрачено: ' + fmt(summary.total, dec));
     out.push('Остаток: ' + fmt(summary.remainder, dec) + ' XP');
-    if (plan.notes) { out.push(''); out.push(String(plan.notes).trim()); }
     return out.join('\n') + '\n';
+  }
+
+  /* lineText — одна позиция плана в выгрузке: «1. Мелисандра: 5». */
+  function lineText(l, dec) {
+    var name = l.short || l.title;
+    if (l.qty > 1) name += ' ×' + l.qty;
+    if (l.number > 0) return l.number + '. ' + name + ': ' + fmt(l.cost, dec) + noteSuffix(l.note);
+    return name + ': ' + fmt(l.cost, dec) + noteSuffix(l.note);
   }
 
   /* availableLadders(plan) — шкалы, доступные в этом каркасе. */

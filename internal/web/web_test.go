@@ -421,7 +421,7 @@ func TestLessonOrderSurvivesSave(t *testing.T) {
 	text := string(txt)
 	for _, want := range []string{
 		"2. пинг систем: 10",
-		"3. ученье — свет!: 15",
+		"3. ученье: 15",
 		"«пинг систем» требует минимум 10-й урок, а стоит 2-м",
 	} {
 		if !strings.Contains(text, want) {

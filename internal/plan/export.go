@@ -6,8 +6,12 @@ import (
 )
 
 // Render выводит план в текстовом формате, принятом для планов культяшки:
-// имя со смайликом, краткие строки, суммы и остатки по секциям,
+// имя со смайликом, по одной строке на раздел, суммы и остатки по разделам,
 // невыученные уроки, не взятые уроки и итоговый остаток.
+//
+// В тексте нет переносов внутри строк: длинный раздел остаётся одной строкой,
+// а переносит его уже тот, кто читает, — чат или страница экспорта. Так план
+// копируется одним куском, и разметка не зависит от ширины окна.
 func Render(p *Plan, s *Summary) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "[*] %s", strings.TrimSpace(p.Title))
@@ -22,34 +26,21 @@ func Render(p *Plan, s *Summary) string {
 	}
 
 	for _, sec := range s.Sections {
-		// Уроки идут одной строкой: «1. поцелуй Мелисандры: 5, 2. …».
-		if sec.Key == SecLessons {
-			writeLessonsLine(&b, p, sec)
+		var parts []string
+		for _, l := range sec.Lines {
+			if l.Deferred {
+				continue // отложенные уроки перечислены в «Невыученных»
+			}
+			parts = append(parts, lineText(p, l))
+		}
+		if len(parts) == 0 {
 			continue
 		}
-		fmt.Fprintf(&b, "%s:\n", sec.Title)
-		for _, l := range sec.Lines {
-			title := l.Title
-			if l.Qty > 1 {
-				title = fmt.Sprintf("%s ×%d", title, l.Qty)
-			}
-			switch {
-			case l.Deferred:
-				note := l.Note
-				if note == "" {
-					note = "невыученный, в следующую жизнь"
-				}
-				fmt.Fprintf(&b, "  - %s (%s)\n", title, note)
-			case l.Number > 0:
-				fmt.Fprintf(&b, "  %d. %s: %s%s\n", l.Number, title, money(p, l.Cost), noteSuffix(l.Note))
-			default:
-				fmt.Fprintf(&b, "  - %s: %s%s\n", title, money(p, l.Cost), noteSuffix(l.Note))
-			}
-		}
+		fmt.Fprintf(&b, "%s: %s\n", sec.Title, strings.Join(parts, ", "))
 		fmt.Fprintf(&b, "  Сумма: %s, ост. %s\n\n", money(p, sec.Sum), money(p, sec.Remainder))
 	}
 
-	// Накопители и фолианты — отдельными строками, как требует формат.
+	// Накопители и фолианты — по строке, как и остальные разделы.
 	// Перечисляем только то, что берём: список «не активирую» и «оставляю
 	// в библиотеке» ничего не добавляет, а место в сообщении занимает.
 	var act []string
@@ -60,22 +51,23 @@ func Render(p *Plan, s *Summary) string {
 		act = append(act, accumulatorLine(p, &p.Accumulators[i]))
 	}
 	if len(act) > 0 {
-		fmt.Fprintf(&b, "Активация накопителей:\n  - активирую: %s\n\n", strings.Join(act, "; "))
+		fmt.Fprintf(&b, "Активация накопителей: %s\n\n", strings.Join(act, ", "))
 	}
 
 	var take []string
-	for _, f := range p.Folios {
+	for i := range p.Folios {
+		f := &p.Folios[i]
 		if !f.Take {
 			continue
 		}
-		line := f.Name
+		line := f.ShortName()
 		if f.Note != "" {
 			line += " (" + f.Note + ")"
 		}
 		take = append(take, line)
 	}
 	if len(take) > 0 {
-		fmt.Fprintf(&b, "Фолианты:\n  - беру с собой: %s\n\n", strings.Join(take, "; "))
+		fmt.Fprintf(&b, "Беру с собой: %s\n\n", strings.Join(take, ", "))
 	}
 
 	if len(s.DeferredUsedKeys(p)) > 0 {
@@ -87,56 +79,39 @@ func Render(p *Plan, s *Summary) string {
 	if len(s.NotTaken) > 0 {
 		var names []string
 		for _, l := range s.NotTaken {
-			names = append(names, l.Title)
+			names = append(names, lineName(l))
 		}
 		fmt.Fprintf(&b, "Не взято: %s\n\n", strings.Join(names, ", "))
 	}
 
 	if len(s.Warnings) > 0 {
-		b.WriteString("Проверки:\n")
-		for _, w := range s.Warnings {
-			fmt.Fprintf(&b, "  ! %s\n", w)
-		}
-		b.WriteString("\n")
-	}
-
-	// Условия, которые касаются будущих жизней: памятка, а не проверка плана.
-	if len(s.Future) > 0 {
-		b.WriteString("На будущие жизни:\n")
-		for _, f := range s.Future {
-			mark := "— пока не выполнено"
-			if f.Met {
-				mark = "— выполнено"
-			}
-			fmt.Fprintf(&b, "  - %s %s\n", strings.TrimSpace(f.Text), mark)
-		}
-		b.WriteString("\n")
+		fmt.Fprintf(&b, "Проверки: %s\n\n", strings.Join(s.Warnings, "; "))
 	}
 
 	fmt.Fprintf(&b, "Итого потрачено: %s\n", money(p, s.Total))
 	fmt.Fprintf(&b, "Остаток: %s XP\n", tail(p, s.Remainder))
-	if p.Notes != "" {
-		fmt.Fprintf(&b, "\n%s\n", strings.TrimSpace(p.Notes))
-	}
 	return b.String()
 }
 
-// writeLessonsLine печатает уроки одной строкой, как требует формат плана:
-// «Уроки: 1. поцелуй Мелисандры: 5 (уже куплено), 2. да сдохни же ты наконец!: 10».
-// Отложенные уроки сюда не попадают: они бесплатны и перечислены в «Невыученных».
-func writeLessonsLine(b *strings.Builder, p *Plan, sec SectionSummary) {
-	var parts []string
-	for _, l := range sec.Lines {
-		if l.Number == 0 {
-			continue
-		}
-		parts = append(parts, fmt.Sprintf("%d. %s: %s%s", l.Number, l.Title, money(p, l.Cost), noteSuffix(l.Note)))
+// lineText печатает одну позицию плана: «1. Мелисандра: 5 (уже куплено)»,
+// «водное тело: 0», «хардкор: 20», «корни мин 50%: 481».
+func lineText(p *Plan, l Line) string {
+	name := lineName(l)
+	if l.Qty > 1 {
+		name = fmt.Sprintf("%s ×%d", name, l.Qty)
 	}
-	if len(parts) == 0 {
-		return
+	if l.Number > 0 {
+		return fmt.Sprintf("%d. %s: %s%s", l.Number, name, money(p, l.Cost), noteSuffix(l.Note))
 	}
-	fmt.Fprintf(b, "%s: %s\n", sec.Title, strings.Join(parts, ", "))
-	fmt.Fprintf(b, "  Сумма: %s, ост. %s\n\n", money(p, sec.Sum), money(p, sec.Remainder))
+	return fmt.Sprintf("%s: %s%s", name, money(p, l.Cost), noteSuffix(l.Note))
+}
+
+// lineName — название строки для выгрузки: короткое, если оно есть.
+func lineName(l Line) string {
+	if l.Short != "" {
+		return l.Short
+	}
+	return l.Title
 }
 
 // accumulatorLine печатает накопитель с состоянием на момент перерождения:
@@ -144,10 +119,10 @@ func writeLessonsLine(b *strings.Builder, p *Plan, sec SectionSummary) {
 // ничего не известно, печатается только название.
 func accumulatorLine(p *Plan, a *Accumulator) string {
 	if !p.AccumulatorKnown(a) {
-		return a.Name
+		return a.ShortName()
 	}
 	charges, max, rate := p.AccumulatorValues(a)
-	line := fmt.Sprintf("%s (%s/%s", a.Name, num(p, charges), num(p, max))
+	line := fmt.Sprintf("%s (%s/%s", a.ShortName(), num(p, charges), num(p, max))
 	if rate != 0 {
 		line += fmt.Sprintf(", +%s%% за жизнь", num(p, rate))
 	}
@@ -167,7 +142,7 @@ func (s *Summary) DeferredUsedKeys(p *Plan) []string {
 	var out []string
 	for _, d := range p.Deferred {
 		if item := p.Item(d.Key); item != nil {
-			out = append(out, displayTitle(item))
+			out = append(out, item.ShortName())
 		}
 	}
 	return out

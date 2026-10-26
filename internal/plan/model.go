@@ -44,11 +44,12 @@ type ShopItem struct {
 	Key       string   `json:"key"`
 	Section   string   `json:"section"`
 	Kind      string   `json:"kind"`
-	Title     string   `json:"title"`          // кратко, как в плане
-	Full      string   `json:"full,omitempty"` // полное название из текста
-	Cost      float64  `json:"cost"`           // база; для растущих уроков 0
-	Fixed     bool     `json:"fixed"`          // фиксированная цена урока
-	MinLesson int      `json:"min_lesson"`     // «можно взять как минимум n-ным уроком»
+	Title     string   `json:"title"`           // кратко, как в плане
+	Short     string   `json:"short,omitempty"` // для выгрузки: ещё короче, «Мелисандра»
+	Full      string   `json:"full,omitempty"`  // полное название из текста
+	Cost      float64  `json:"cost"`            // база; для растущих уроков 0
+	Fixed     bool     `json:"fixed"`           // фиксированная цена урока
+	MinLesson int      `json:"min_lesson"`      // «можно взять как минимум n-ным уроком»
 	Once      bool     `json:"once"`
 	Requires  []string `json:"requires,omitempty"`
 	Excludes  []string `json:"excludes,omitempty"`
@@ -134,6 +135,7 @@ type Deferred struct {
 type Accumulator struct {
 	Key      string  `json:"key"`
 	Name     string  `json:"name"`
+	Short    string  `json:"short,omitempty"` // название для выгрузки
 	Activate bool    `json:"activate"`
 	Charges  float64 `json:"charges"`
 	Max      float64 `json:"max"`
@@ -148,8 +150,9 @@ type Accumulator struct {
 type Folio struct {
 	Key      string `json:"key"`
 	Name     string `json:"name"`
-	Take     bool   `json:"take"`     // берём с собой в следующую жизнь
-	Deferred bool   `json:"deferred"` // отложен невыученными уроками
+	Short    string `json:"short,omitempty"` // название для выгрузки
+	Take     bool   `json:"take"`            // берём с собой в следующую жизнь
+	Deferred bool   `json:"deferred"`        // отложен невыученными уроками
 	Cost     string `json:"cost,omitempty"`
 	Note     string `json:"note,omitempty"`
 	// Requires — что нужно сделать, чтобы фолиант можно было взять с собой:
@@ -171,6 +174,7 @@ type LadderCfg struct {
 	Key     string     `json:"key"`
 	Section string     `json:"section"`
 	Title   string     `json:"title"`
+	Short   string     `json:"short,omitempty"` // название для выгрузки
 	Unit    string     `json:"unit,omitempty"`
 	From    float64    `json:"from"`
 	To      float64    `json:"to"`
@@ -304,6 +308,7 @@ func (p *Plan) Normalize() {
 			l.Title = l.Key
 		}
 	}
+	p.applyShorts()
 	p.dropLadderDuplicates()
 	// Количество покупок не выходит за разрешённый повтор.
 	for i := range p.Picks {

@@ -252,8 +252,8 @@ func TestFixedLessonsHaveOwnSection(t *testing.T) {
 	if lessonLines != 1 {
 		t.Errorf("ждал одну строку уроков, получил %d:\n%s", lessonLines, txt)
 	}
-	if strings.Contains(txt, "- профессиональная Дева-в-Беде") == false {
-		t.Error("фиксированный урок не напечатан отдельной строкой")
+	if !strings.Contains(txt, "Уроки с фиксированной ценой: Дева: 5") {
+		t.Errorf("фиксированный урок не напечатан своей строкой:\n%s", txt)
 	}
 }
 
@@ -310,7 +310,7 @@ func TestLessonIgnoresCardSection(t *testing.T) {
 			line = l
 		}
 	}
-	if !strings.Contains(line, "водное телосложение") || !strings.Contains(line, "родословная Радужной Форели") {
+	if !strings.Contains(line, "водное тело") || !strings.Contains(line, "форель") {
 		t.Errorf("в строке уроков нет уроков из чужих секций:\n%s", txt)
 	}
 }
@@ -373,6 +373,84 @@ func TestExportListsOnlyTaken(t *testing.T) {
 	}
 	if strings.Contains(txt, "Активация накопителей:") {
 		t.Error("блок активации напечатан, хотя активировать нечего")
+	}
+}
+
+// TestExportOneLinePerSection — каждый раздел печатается одной строкой:
+// «Заплатки: без тренировок: 0», а не списком по позиции на строку.
+func TestExportOneLinePerSection(t *testing.T) {
+	p := fixturePlan(t)
+	sum := plan.Compute(p)
+	txt := plan.Render(p, sum)
+
+	for _, line := range strings.Split(txt, "\n") {
+		if strings.HasPrefix(line, "  - ") {
+			t.Fatalf("позиция напечатана отдельной строкой: %q\n%s", line, txt)
+		}
+	}
+	for _, sec := range sum.Sections {
+		var lines []string
+		for _, line := range strings.Split(txt, "\n") {
+			if strings.HasPrefix(line, sec.Title+": ") || line == sec.Title+":" {
+				lines = append(lines, line)
+			}
+		}
+		if len(lines) != 1 {
+			t.Errorf("раздел %q напечатан %d строками, ждал одну: %q", sec.Title, len(lines), lines)
+		}
+	}
+}
+
+// TestExportUsesShortNames — в выгрузке позиции называются коротко:
+// «1. Мелисандра: 5», а не «1. поцелуй Мелисандры: 5».
+func TestExportUsesShortNames(t *testing.T) {
+	p := fixturePlan(t)
+	txt := plan.Render(p, plan.Compute(p))
+
+	for _, want := range []string{"1. Мелисандра: 5", "Туман: 35", "Джон Сноу: 200", "корни мин 50%: 481", "Беру с собой: Туман"} {
+		if !strings.Contains(txt, want) {
+			t.Errorf("в выгрузке нет %q:\n%s", want, txt)
+		}
+	}
+	for _, unwanted := range []string{"поцелуй Мелисандры", "метод Непроглядного Тумана (освоено)", "оплата перерождения Джона Сноу"} {
+		if strings.Contains(txt, unwanted) {
+			t.Errorf("в выгрузке осталось длинное название %q:\n%s", unwanted, txt)
+		}
+	}
+}
+
+// TestExportKeepsOnlyThePlan — заметки каркаса («Каркас по посмертию…»)
+// и памятка «На будущие жизни» в план не попадают: план читают как список
+// покупок, а памятка живёт в конструкторе.
+func TestExportKeepsOnlyThePlan(t *testing.T) {
+	p := fixturePlan(t)
+	p.Notes = "Каркас по посмертию после подвига в секте Звенящих ручьёв"
+	p.Normalize()
+	sum := plan.Compute(p)
+	if len(sum.Future) == 0 {
+		t.Fatal("в каркасе нет условий «на будущие жизни» — проверять нечего")
+	}
+	txt := plan.Render(p, sum)
+	if strings.Contains(txt, "На будущие жизни") {
+		t.Errorf("в плане осталась памятка «На будущие жизни»:\n%s", txt)
+	}
+	if strings.Contains(txt, "Каркас по посмертию") {
+		t.Errorf("в план попали заметки каркаса:\n%s", txt)
+	}
+	if strings.Contains(txt, "Джона Сноу") {
+		t.Errorf("в плане осталось условие «на будущие жизни»:\n%s", txt)
+	}
+}
+
+// TestExportHasNoSoftLineBreaks — переносы строк делает читатель (чат или
+// страница), в самом тексте их нет: длинный раздел остаётся одной строкой.
+func TestExportHasNoSoftLineBreaks(t *testing.T) {
+	p := fixturePlan(t)
+	txt := plan.Render(p, plan.Compute(p))
+	for _, line := range strings.Split(txt, "\n") {
+		if strings.HasSuffix(line, ",") {
+			t.Fatalf("строка обрывается на запятой: %q", line)
+		}
 	}
 }
 

@@ -610,9 +610,6 @@ input[type="checkbox"], input[type="radio"] {
 }
 .export-warn b { color: var(--blood-bright); }
 .export-warn .warn-list { margin: 6px 0 4px; padding-left: 18px; }
-.future-list { margin: 6px 0; padding-left: 18px; font-size: 13px; }
-.future-list .unmet { color: var(--muted); }
-.future-list .met { color: var(--jade); }
 
 /* Шкала: «уже есть» — база, за неё опыт не списывается. */
 .ladder-hint { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -729,7 +726,14 @@ html[data-theme="light"] .panel-modal { background: rgba(43, 38, 32, .42); }
   box-shadow: var(--shadow);
 }
 .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
-.export-text { min-height: 380px; white-space: pre; }
+/* В самом тексте плана переносов нет: каждый раздел — одна строка.
+   Переносит их только показ, по ширине окна, — иначе длинная строка уроков
+   уезжала бы за край, а копировался бы текст с лишними переводами строк. */
+.export-text {
+  min-height: 380px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 
 .stat-row { display: flex; gap: 28px; flex-wrap: wrap; }
 .stat { display: flex; flex-direction: column; }

@@ -10,6 +10,7 @@ import (
 type Line struct {
 	Key      string  `json:"key"`
 	Title    string  `json:"title"`
+	Short    string  `json:"short,omitempty"` // название для выгрузки
 	Cost     float64 `json:"cost"`
 	Number   int     `json:"number,omitempty"` // номер урока
 	Fixed    bool    `json:"fixed,omitempty"`
@@ -77,7 +78,7 @@ func Compute(p *Plan) *Summary {
 		if p.IsDeferred(pick.Key) {
 			continue
 		}
-		l := Line{Key: item.Key, Title: displayTitle(item), Fixed: item.Fixed}
+		l := Line{Key: item.Key, Title: displayTitle(item), Short: item.ShortName(), Fixed: item.Fixed}
 		section := SecLessons
 		if item.Fixed {
 			// Фиксированная цена — отдельный раздел: номер такие уроки
@@ -160,7 +161,7 @@ func Compute(p *Plan) *Summary {
 			warnings = append(warnings, fmt.Sprintf("«%s» нельзя отложить невыученными уроками", item.Title))
 		}
 		lines[SecLessons] = append(lines[SecLessons], Line{
-			Key: item.Key, Title: displayTitle(item), Deferred: true,
+			Key: item.Key, Title: displayTitle(item), Short: item.ShortName(), Deferred: true,
 			Note: "невыученный, в следующую жизнь",
 		})
 	}
@@ -187,7 +188,8 @@ func Compute(p *Plan) *Summary {
 			note = "уже куплено"
 		}
 		lines[sec] = append(lines[sec], Line{
-			Key: item.Key, Title: displayTitle(item), Cost: cost, Qty: qty, Note: note,
+			Key: item.Key, Title: displayTitle(item), Short: item.ShortName(),
+			Cost: cost, Qty: qty, Note: note,
 		})
 	}
 
@@ -203,7 +205,8 @@ func Compute(p *Plan) *Summary {
 		}
 		total += cost
 		lines[l.Section] = append(lines[l.Section], Line{
-			Key: l.Key, Title: ladderTitle(l), Cost: cost, Ladder: true,
+			Key: l.Key, Title: ladderTitle(l), Short: shortLadderTitle(l),
+			Cost: cost, Ladder: true,
 		})
 	}
 
@@ -273,7 +276,9 @@ func Compute(p *Plan) *Summary {
 		if item == nil {
 			continue
 		}
-		summary.NotTaken = append(summary.NotTaken, Line{Key: item.Key, Title: displayTitle(item), NotTaken: true})
+		summary.NotTaken = append(summary.NotTaken, Line{
+			Key: item.Key, Title: displayTitle(item), Short: item.ShortName(), NotTaken: true,
+		})
 	}
 	_ = taken
 	sort.SliceStable(summary.NotTaken, func(i, j int) bool {
@@ -423,6 +428,20 @@ func ladderTitle(l *LadderCfg) string {
 		return fmt.Sprintf("%s: %s%s", l.Title, val, l.Unit)
 	}
 	return fmt.Sprintf("%s: %s", l.Title, val)
+}
+
+// shortLadderTitle — как шкала печатается в выгрузке: короткое название
+// и значение через пробел, «корни мин 50%», «кость d24».
+func shortLadderTitle(l *LadderCfg) string {
+	val := formatNum(l.Value)
+	name := l.ShortName()
+	switch {
+	case l.Unit == "d":
+		return fmt.Sprintf("%s d%s", name, val)
+	case l.Unit != "":
+		return fmt.Sprintf("%s %s%s", name, val, l.Unit)
+	}
+	return fmt.Sprintf("%s %s", name, val)
 }
 
 // formatNum печатает число без лишних нулей.

@@ -35,19 +35,9 @@
   </div>
   {% endif %}
   <textarea class="export-text" id="export-text" rows="28" readonly>{{ export_text }}</textarea>
+  <p class="muted small">Строки на экране переносятся по ширине окна — в самом тексте переносов нет:
+     каждый раздел остаётся одной строкой, так план и уезжает в чат.</p>
 </section>
-
-{% if summary.future %}
-<section class="panel">
-  <h2>На будущие жизни</h2>
-  <ul class="future-list">
-    {% for f in summary.future %}
-    <li class="{{ 'met' if f.met else 'unmet' }}">{{ '✓' if f.met else '·' }} {{ f.text }}</li>
-    {% endfor %}
-  </ul>
-  <p class="muted small">Это памятка, а не проверка плана: Джон Сноу перерождается не раньше следующей жизни.</p>
-</section>
-{% endif %}
 {% endblock %}
 {% block scripts %}
 <script>

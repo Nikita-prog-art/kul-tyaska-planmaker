@@ -181,7 +181,7 @@ test('уже взятая заплатка в плане и помечена «�
   const line = patches.lines.filter((l) => /otkluchenie/.test(l.key))[0];
   assert.ok(line, 'заплатка попала в расчёт');
   assert.strictEqual(line.note, 'уже куплено');
-  assert.ok(exportText().indexOf('отключение тренировок') >= 0, 'заплатка есть в выгрузке');
+  assert.ok(/^Заплатки: без тренировок: 0/m.test(exportText()), 'заплатка есть в выгрузке');
 });
 
 test('обязательная позиция каркаса всегда в плане', () => {
@@ -220,7 +220,7 @@ test('«невыученный» освобождает урок от оплат
   assert.ok(st.deferred.some((d) => /da_sdohni/.test(d.key)), 'урок ушёл в отложенные');
   assert.ok(!st.picks.some((p) => /da_sdohni/.test(p.key)), 'и убрался из покупок');
   const txt = exportText();
-  assert.ok(/Невыученные:[^\n]*да сдохни же ты наконец!/.test(txt), 'в «Невыученных» урок назван');
+  assert.ok(/Невыученные:[^\n]*сдохни/.test(txt), 'в «Невыученных» урок назван');
   assert.ok(!/^Уроки:[^\n]*да сдохни/m.test(txt), 'в строке уроков его больше нет: он бесплатный');
 });
 
@@ -231,7 +231,7 @@ test('«не беру» попадает в раздел «Не взято»', (
   const st = stateText();
   assert.ok(st.not_taken.some((k) => /diletantka/.test(k)), 'урок помечен «не беру»');
   assert.ok(exportText().indexOf('Не взято:') >= 0, 'раздел появился');
-  assert.ok(exportText().indexOf('дилетантка широкого профиля') >= 0, 'урок перечислен');
+  assert.ok(/Не взято:[^\n]*дилетантка/.test(exportText()), 'урок перечислен');
 });
 
 test('шкала таланта считается по шагам', () => {
@@ -538,6 +538,23 @@ test('галочки накопителей не растягиваются на
   assert.strictEqual(field.padding, '9px 12px', 'и со своими отступами: ' + field.padding);
 });
 
+
+test('длинные строки выгрузки переносятся показом, а не переносами в тексте', () => {
+  // Переносов внутри разделов в тексте нет — их делает поле выгрузки.
+  const css = fs.readFileSync(path.join(root, 'internal/web/static/app.css'), 'utf8');
+  const page = new JSDOM('<!doctype html><html><head><style>' + css + '</style></head><body>' +
+    '<textarea class="export-text"></textarea></body></html>');
+  const box = page.window.getComputedStyle(page.window.document.querySelector('.export-text'));
+  assert.strictEqual(box.whiteSpace, 'pre-wrap', 'поле выгрузки переносит строки по ширине');
+
+  // А в самом тексте раздел остаётся одной строкой, даже когда он длинный.
+  const d = bootPage(JSON.parse(JSON.stringify(plan))).document;
+  const txt = d.getElementById('kt-export-text').value;
+  const lessons = txt.split('\n').filter((l) => l.indexOf('Уроки: ') === 0)[0];
+  assert.ok(lessons && lessons.length > 90, 'строка уроков длинная: ' + (lessons || '').length);
+  assert.ok(!/,\n/.test(txt), 'в тексте нет переносов по запятой');
+});
+
 test('покупка не сбрасывает прокрутку правой панели', () => {
   const d = bootPage(JSON.parse(JSON.stringify(plan))).document;
   const side = d.querySelector('.sidebar');
@@ -584,14 +601,11 @@ test('накопители и фолианты отмечаются отдель
   // Фолиант, который берут с собой, отмечается вручную и виден в выгрузке.
   const tuman = find(/Непроглядного Тумана/);
   assert.strictEqual(tuman.querySelector('input').checked, true, 'фолиант отмечен к переносу');
-  assert.ok(/беру с собой:[^\n]*Непроглядного/.test(d.getElementById('kt-export-text').value),
+  assert.ok(/Беру с собой:[^\n]*Туман/.test(d.getElementById('kt-export-text').value),
     'отмеченный фолиант есть в «беру с собой»');
   tuman.querySelector('input').click();
   const txt = d.getElementById('kt-export-text').value;
-  assert.ok(!/беру с собой:[^\n]*Непроглядного/.test(txt), 'ушёл из «беру с собой»');
-  // Ничего не берём — блок про фолианты в выгрузке не печатается вовсе:
-  // список «оставляю в библиотеке» только занимал место.
-  assert.ok(!/беру с собой/.test(txt), 'блок «беру с собой» пропал целиком');
+  assert.ok(!/Беру с собой:/.test(txt), 'ушёл из «беру с собой», и блок пропал целиком');
   assert.ok(!/оставляю в библиотеке/.test(txt), 'списка «оставляю в библиотеке» больше нет');
 });
 
@@ -670,7 +684,7 @@ test('взять фолиант можно после урока и выкупа
   const spent = d.getElementById('sum-spent').textContent;
   tuman().querySelector('input').click();
   assert.strictEqual(d.getElementById('sum-spent').textContent, spent, 'сам выбор фолианта бесплатный');
-  assert.ok(/беру с собой:[^\n]*Непроглядного/.test(d.getElementById('kt-export-text').value),
+  assert.ok(/Беру с собой:[^\n]*Туман/.test(d.getElementById('kt-export-text').value),
     'фолиант попал в «беру с собой»');
 });
 
