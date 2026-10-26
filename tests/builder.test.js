@@ -520,6 +520,24 @@ test('повторяемую покупку можно взять дважды',
   assert.strictEqual(rowByTitleIn(d, 'лестница в небо').querySelector('.qty-value').textContent, '×2');
 });
 
+test('галочки накопителей не растягиваются на полстроки', () => {
+  // Общее правило для полей ввода когда-то задевало и чекбоксы: они получали
+  // width: 100% и padding, из-за чего текст уезжал вправо на ширину невидимого
+  // поля. Проверяем, что галочка маленькая, а текстовое поле тянется как надо.
+  const css = fs.readFileSync(path.join(root, 'internal/web/static/app.css'), 'utf8');
+  const page = new JSDOM('<!doctype html><html><head><style>' + css + '</style></head><body>' +
+    '<div class="card"><div class="attach-list"><label class="attach">' +
+    '<input type="checkbox"><span>горожане</span></label></div>' +
+    '<input type="text" class="probe"></div></body></html>');
+  const d = page.window.document;
+  const box = page.window.getComputedStyle(d.querySelector('input[type="checkbox"]'));
+  assert.strictEqual(box.width, '16px', 'галочка размером с текст: ' + box.width);
+  assert.strictEqual(box.padding, '0px', 'у галочки нет поля ввода: ' + box.padding);
+  const field = page.window.getComputedStyle(d.querySelector('input[type="text"]'));
+  assert.strictEqual(field.width, '100%', 'текстовое поле по-прежнему во всю ширину: ' + field.width);
+  assert.strictEqual(field.padding, '9px 12px', 'и со своими отступами: ' + field.padding);
+});
+
 test('накопители и фолианты отмечаются отдельно от магазина', () => {
   const d = bootPage(JSON.parse(JSON.stringify(plan))).document;
   const card = d.querySelector('#kt-attach');

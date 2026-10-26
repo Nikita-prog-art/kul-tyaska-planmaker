@@ -331,7 +331,10 @@ h3 { font-size: 16px; }
 .btn.tiny { padding: 2px 9px; font-size: 12px; border-radius: 8px; }
 .btn[disabled] { opacity: .42; cursor: not-allowed; transform: none; }
 
-input, select, textarea {
+/* Поля ввода. Галочки и переключатели сюда не входят: им нельзя задавать
+   width: 100% и padding — от этого чекбокс растягивался на полстроки, а текст
+   уезжал вправо на ширину невидимого поля. */
+input:not([type="checkbox"]):not([type="radio"]), select, textarea {
   font: inherit;
   color: var(--text);
   background: var(--bg-2);
@@ -342,13 +345,20 @@ input, select, textarea {
   transition: border-color .15s ease, box-shadow .15s ease;
 }
 input::placeholder, textarea::placeholder { color: var(--muted); opacity: .8; }
-input:focus, select:focus, textarea:focus {
+input:not([type="checkbox"]):not([type="radio"]):focus, select:focus, textarea:focus {
   outline: none;
   border-color: rgba(var(--jade-rgb), .6);
   box-shadow: var(--ring);
 }
 textarea { resize: vertical; line-height: 1.55; }
-input[type="checkbox"] { accent-color: var(--jade); }
+input[type="checkbox"], input[type="radio"] {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--jade);
+}
 
 .form { display: flex; flex-direction: column; gap: 14px; max-width: 460px; }
 .form.grid { max-width: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; }
@@ -649,9 +659,10 @@ input.num.ladder-owned {
   color: var(--muted);
 }
 .attach-sub + .attach-list { margin-top: 4px; }
-.attach-list { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
-.attach { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.45; cursor: pointer; color: var(--text-soft); }
-.attach input { accent-color: var(--jade); margin-top: 2px; }
+.attach-list { display: flex; flex-direction: column; gap: 7px; margin-top: 8px; }
+.attach { display: flex; align-items: flex-start; gap: 9px; font-size: 13px; line-height: 1.45; cursor: pointer; color: var(--text-soft); }
+/* Галочка размером с текст, а не на всю строку: отступ у неё свой. */
+.attach input[type="checkbox"] { margin-top: 2px; }
 /* Отметка, которую план позволить не может: незаряженный накопитель,
    фолиант без урока метода и выкупа. */
 .attach.off { color: var(--muted); cursor: not-allowed; }
