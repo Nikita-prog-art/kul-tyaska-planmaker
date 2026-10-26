@@ -15,6 +15,18 @@ check() { if [ "$2" = "$3" ]; then ok "$1 ($2)"; else bad "$1: получил $2
 
 echo "Дымовая проверка $BASE"
 
+# После выкладки туннель и приложение поднимаются не мгновенно: если начать
+# сразу, весь прогон падает на 502 от края, хотя сервер в порядке. Ждём health.
+READY=0
+for _ in $(seq 1 20); do
+  if [ "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "$BASE/healthz" || true)" = "200" ]; then
+    READY=1
+    break
+  fi
+  sleep 2
+done
+if [ "$READY" = "1" ]; then ok "сайт отвечает"; else bad "сайт не поднялся за 40 секунд"; fi
+
 check "главная отдаётся" "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$BASE/")" "200"
 if curl -sS --max-time 20 "$BASE/" | grep -q "Планировщик"; then ok "на главной есть заголовок"; else bad "на главной нет заголовка"; fi
 
