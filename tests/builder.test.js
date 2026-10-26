@@ -481,6 +481,21 @@ test('фиксированные уроки в конструкторе — от
   assert.strictEqual(fixed.querySelector('.sec-tools'), null, 'кнопка «Разложить» не касается фиксированных');
 });
 
+test('уроки на телосложение и родословную стоят среди уроков', () => {
+  const d = bootPage(JSON.parse(JSON.stringify(plan))).document;
+  const titles = Array.from(d.querySelectorAll('#sec-lessons .row.item .item-title'))
+    .map((x) => x.textContent.replace(/\s+/g, ' ').trim());
+  assert.ok(titles.some((t) => t.indexOf('водное телосложение') >= 0), 'телосложение в уроках: ' + titles.join(' | '));
+  assert.ok(titles.some((t) => t.indexOf('родословная Радужной Форели') >= 0), 'родословная в уроках');
+  assert.strictEqual(d.querySelector('#sec-physique'), null, 'отдельного раздела «Телосложения» нет');
+  assert.strictEqual(d.querySelector('#sec-bloodline'), null, 'отдельного раздела «Родословные» нет');
+
+  // Взятой урок получает номер в общей очереди, а не отдельный счётчик.
+  rowByTitleIn(d, 'водное телосложение').querySelector('[data-act="pick"]').click();
+  const badge = rowByTitleIn(d, 'водное телосложение').querySelector('.badge').textContent;
+  assert.ok(Number(badge) > 0, 'урок занял номер в очереди: ' + badge);
+});
+
 test('повторяемую покупку можно взять дважды', () => {
   const w = bootPage(JSON.parse(JSON.stringify(plan)));
   const d = w.document;

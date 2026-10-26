@@ -257,6 +257,64 @@ func TestFixedLessonsHaveOwnSection(t *testing.T) {
 	}
 }
 
+// TestLessonIgnoresCardSection — урок остаётся уроком, даже если каркас
+// записал его в «Телосложения» или «Родословные»: нумерация, цена и раздел
+// «Уроки» от этого не меняются.
+func TestLessonIgnoresCardSection(t *testing.T) {
+	sk := presetSkeleton(t)
+	p := sk.NewPlan("u", "Телосложение", "")
+	// Так выглядел старый каркас: урок лежал в чужой секции.
+	for i := range p.Shop {
+		switch p.Shop[i].Key {
+		case "lesson:vodnoe_teloslozhenie":
+			p.Shop[i].Section = plan.SecPhysique
+		case "lesson:rodoslovnaya_raduzhnoy_foreli":
+			p.Shop[i].Section = plan.SecBloodline
+		}
+	}
+	p.Picks = append(p.Picks,
+		plan.Pick{Key: "lesson:vodnoe_teloslozhenie"},
+		plan.Pick{Key: "lesson:rodoslovnaya_raduzhnoy_foreli"},
+	)
+	p.Normalize()
+	sum := plan.Compute(p)
+
+	found := map[string]int{}
+	for i := range sum.Sections {
+		sec := &sum.Sections[i]
+		switch sec.Key {
+		case plan.SecPhysique, plan.SecBloodline:
+			t.Errorf("уроки попали в раздел %q", sec.Key)
+		}
+		for _, l := range sec.Lines {
+			if l.Key == "lesson:vodnoe_teloslozhenie" || l.Key == "lesson:rodoslovnaya_raduzhnoy_foreli" {
+				found[l.Key] = sec.Order
+				if sec.Key != plan.SecLessons {
+					t.Errorf("урок %q оказался в разделе %q", l.Key, sec.Key)
+				}
+				if l.Number == 0 {
+					t.Errorf("урок %q остался без номера", l.Key)
+				}
+			}
+		}
+	}
+	for _, key := range []string{"lesson:vodnoe_teloslozhenie", "lesson:rodoslovnaya_raduzhnoy_foreli"} {
+		if _, ok := found[key]; !ok {
+			t.Errorf("урок %q не попал в план", key)
+		}
+	}
+	txt := plan.Render(p, sum)
+	line := ""
+	for _, l := range strings.Split(txt, "\n") {
+		if strings.HasPrefix(l, "Уроки: ") {
+			line = l
+		}
+	}
+	if !strings.Contains(line, "водное телосложение") || !strings.Contains(line, "родословная Радужной Форели") {
+		t.Errorf("в строке уроков нет уроков из чужих секций:\n%s", txt)
+	}
+}
+
 // TestDuplicateLadderItemDropped — покупка, которая повторяет шкалу
 // («шанс «один на миллиард»» был и ступенью, и галочкой), из плана уходит:
 // иначе одну позицию можно было взять дважды за 400 XP.

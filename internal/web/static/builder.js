@@ -523,18 +523,24 @@
 
   function renderSections() {
     var order = sections.slice().sort(function (a, b) { return (a.order || 99) - (b.order || 99); });
-    var groups = {};
+    // Урок — всегда урок: даже если в каркасе он записан в «Телосложения» или
+    // «Родословные» (водное телосложение, родословная), в конструкторе он
+    // стоит среди уроков — там, где занимает номер и цену.
+    var groups = {}, lessonItems = [], fixedItems = [];
     plan.shop.forEach(function (it) {
+      if (it.kind === 'lesson') {
+        (it.fixed ? fixedItems : lessonItems).push(it);
+        return;
+      }
       var sec = it.section || 'other';
       (groups[sec] = groups[sec] || []).push(it);
     });
-    // Уроки делятся на два раздела: нумерованные и с фиксированной ценой.
-    // В плане они и так идут порознь, поэтому и в магазине не перемешиваются:
-    // иначе «Дева-в-Беде» за 5 XP стоит среди уроков, которые занимают номер.
-    var lessons = groups.lessons || [];
-    groups.lessons = lessons.filter(function (it) { return !it.fixed; });
-    groups.fixed = (groups.fixed || []).concat(lessons.filter(function (it) { return it.fixed; }));
-    var emptyLessons = !lessons.length;
+    // Нумерованные и фиксированные уроки — два отдельных раздела: в плане
+    // они и так идут порознь, а «Дева-в-Беде» за 5 XP не должна стоять среди
+    // уроков, которые занимают номер.
+    groups.lessons = (groups.lessons || []).concat(lessonItems);
+    groups.fixed = (groups.fixed || []).concat(fixedItems);
+    var emptyLessons = !lessonItems.length && !fixedItems.length;
     var ladders = {};
     (plan.ladders || []).forEach(function (l) {
       if (l.hidden) return;

@@ -173,7 +173,7 @@
     {
       "key": "lesson:vodnoe_teloslozhenie",
       "kind": "lesson",
-      "section": "physique",
+      "section": "lessons",
       "title": "водное телосложение (обычное)",
       "min_lesson": 4,
       "desc": "Можно взять как минимум четвёртым уроком. Добавляется в неактивные телосложения: активировать можно, только деактивировав огненное."
@@ -181,7 +181,7 @@
     {
       "key": "lesson:rodoslovnaya_raduzhnoy_foreli",
       "kind": "lesson",
-      "section": "bloodline",
+      "section": "lessons",
       "title": "родословная Радужной Форели (обычная)",
       "min_lesson": 4,
       "desc": "Можно взять как минимум четвёртым уроком. Чешуя (+2% защиты), лучше плавание, водные корни, бонусы к водным методам."

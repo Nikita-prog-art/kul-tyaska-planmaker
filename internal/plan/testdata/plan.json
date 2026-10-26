@@ -1,5 +1,5 @@
 {
-  "id": "dff35569e3709fdbecdf6852",
+  "id": "80d266d3ca9e120d95b584db",
   "user_id": "user-1",
   "title": "План «всё влезет»",
   "emoji": "🔥",
@@ -220,7 +220,7 @@
     },
     {
       "key": "lesson:vodnoe_teloslozhenie",
-      "section": "physique",
+      "section": "lessons",
       "kind": "lesson",
       "title": "водное телосложение (обычное)",
       "cost": 0,
@@ -231,7 +231,7 @@
     },
     {
       "key": "lesson:rodoslovnaya_raduzhnoy_foreli",
-      "section": "bloodline",
+      "section": "lessons",
       "kind": "lesson",
       "title": "родословная Радужной Форели (обычная)",
       "cost": 0,
