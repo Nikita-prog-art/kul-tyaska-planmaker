@@ -560,8 +560,11 @@ func TestLockedAndRequirements(t *testing.T) {
 		t.Fatalf("ждал одну награду за порядок, получил %+v", got.Rewards)
 	}
 	txt := plan.Render(p4, got)
-	if !strings.Contains(txt, "квестовая награда") {
-		t.Error("в тексте плана нет пометки о квестовой награде")
+	if !strings.Contains(txt, "(с бонусом)") {
+		t.Error("в тексте плана нет короткой пометки о награде")
+	}
+	if strings.Contains(txt, "итоговый бонус вырос") {
+		t.Error("в тексте плана длинное описание награды")
 	}
 	if !strings.Contains(txt, "⚠ Проверки не выполняются") {
 		t.Error("в тексте плана нет предупреждения о проваленных проверках")

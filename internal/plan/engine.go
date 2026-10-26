@@ -227,7 +227,9 @@ func Compute(p *Plan) *Summary {
 		}
 		if pickIndex(p, it.Key) > refIdx {
 			rewards = append(rewards, fmt.Sprintf("«%s»: %s", displayTitle(it), text))
-			noteLine(lines, it.Key, text)
+			// В плане награда называется коротко: длинное пояснение только
+			// растягивает строку, а сам бонус и так понятен.
+			noteLine(lines, it.Key, "с бонусом")
 			continue
 		}
 		lost := reward.Lose

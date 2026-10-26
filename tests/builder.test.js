@@ -352,7 +352,8 @@ test('награда за порядок: видна потеря и чинит�
   assert.ok(after.querySelector('.reward-hint.got'), 'после перестановки награда получена');
   const rewards = d.getElementById('kt-rewards');
   assert.ok(rewards && !rewards.hidden, 'награда попала в список наград');
-  assert.ok(d.getElementById('kt-export-text').value.indexOf('квестовая награда') >= 0, 'награда есть в выгрузке');
+  assert.ok(/\(с бонусом\)/.test(d.getElementById('kt-export-text').value), 'награда в выгрузке названа коротко');
+  assert.ok(d.getElementById('kt-export-text').value.indexOf('+4%') < 0, 'длинного описания награды в выгрузке нет');
 });
 
 test('обязательный урок двигается вручную, уже взятый — нет', () => {

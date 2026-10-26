@@ -174,7 +174,8 @@
       var text = title + (r.note ? ': ' + r.note : '');
       if (pickIndex(plan, it.key) > refIdx) {
         rewards.push('«' + it.title + '»: ' + text);
-        noteLine(bySection, it.key, text);
+        // В плане награда называется коротко, как и в Go-движке.
+        noteLine(bySection, it.key, 'с бонусом');
         return;
       }
       var lost = r.lose || r.note || '';
