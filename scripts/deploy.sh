@@ -78,11 +78,14 @@ echo "== выкладка бинарника и юнитов =="
 rscp "$BIN" "$HOST:/tmp/kultyaska.new"
 rscp "$ROOT/deploy/kul-tyaska.service" "$HOST:/tmp/kul-tyaska.service"
 rscp "$ROOT/deploy/kul-tyaska-tunnel.service" "$HOST:/tmp/kul-tyaska-tunnel.service"
+rscp "$ROOT/scripts/prune-smoke.py" "$HOST:/tmp/prune-smoke.py"
 rssh 'sudo install -m 0755 /tmp/kultyaska.new /opt/kul-tyaska/kultyaska &&
       rm -f /tmp/kultyaska.new &&
       sudo install -m 0644 /tmp/kul-tyaska.service /etc/systemd/system/kul-tyaska.service &&
       sudo install -m 0644 /tmp/kul-tyaska-tunnel.service /etc/systemd/system/kul-tyaska-tunnel.service &&
       rm -f /tmp/kul-tyaska.service /tmp/kul-tyaska-tunnel.service &&
+      sudo install -m 0755 /tmp/prune-smoke.py /opt/kul-tyaska/prune-smoke.py &&
+      rm -f /tmp/prune-smoke.py &&
       sudo systemctl daemon-reload'
 
 echo "== запуск сервисов =="

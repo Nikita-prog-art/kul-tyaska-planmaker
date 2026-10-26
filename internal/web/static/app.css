@@ -656,7 +656,7 @@ input.num.ladder-owned {
    фолиант без урока метода и выкупа. */
 .attach.off { color: var(--muted); cursor: not-allowed; }
 .attach.off input { cursor: not-allowed; }
-.ladder-main { display: flex; flex-direction: column; }
+.ladder-main { display: flex; flex-direction: column; gap: 2px; }
 .ladder-ctl { display: flex; align-items: center; gap: 6px; }
 .ladder-ctl input { width: 74px; text-align: center; font-family: var(--mono); }
 
