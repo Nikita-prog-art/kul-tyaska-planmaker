@@ -528,6 +528,13 @@
       var sec = it.section || 'other';
       (groups[sec] = groups[sec] || []).push(it);
     });
+    // Уроки делятся на два раздела: нумерованные и с фиксированной ценой.
+    // В плане они и так идут порознь, поэтому и в магазине не перемешиваются:
+    // иначе «Дева-в-Беде» за 5 XP стоит среди уроков, которые занимают номер.
+    var lessons = groups.lessons || [];
+    groups.lessons = lessons.filter(function (it) { return !it.fixed; });
+    groups.fixed = (groups.fixed || []).concat(lessons.filter(function (it) { return it.fixed; }));
+    var emptyLessons = !lessons.length;
     var ladders = {};
     (plan.ladders || []).forEach(function (l) {
       if (l.hidden) return;
@@ -540,17 +547,18 @@
       var items = orderedItems(sec.key, groups[sec.key] || []);
       var lads = ladders[sec.key] || [];
       if (!items.length && !lads.length && sec.key !== 'lessons') return;
-      out.push(renderSection(sec, items, lads));
+      out.push(renderSection(sec, items, lads, sec.key === 'lessons' && emptyLessons));
     });
     // Позиции из неизвестных секций — в «прочее».
     return out;
   }
 
-  /* orderedItems расставляет строки секции уроков в порядке покупки: сверху то,
+  /* orderedItems расставляет строки уроков в порядке покупки: сверху то,
      что берётся раньше. Так перестановка уроков видна глазами, а не только в
-     номерах. Отложенные (невыученные) идут следом, остальное — как в магазине. */
+     номерах. Отложенные (невыученные) идут следом, остальное — как в магазине.
+     Фиксированные уроки живут в своём разделе, но порядок у них тот же. */
   function orderedItems(secKey, items) {
-    if (secKey !== 'lessons') return items;
+    if (secKey !== 'lessons' && secKey !== 'fixed') return items;
     var rank = {}, drank = {};
     plan.picks.forEach(function (pk, i) {
       if (rank[pk.key] === undefined) rank[pk.key] = i;
@@ -569,7 +577,7 @@
     return picked.concat(deferred, rest);
   }
 
-  function renderSection(sec, items, ladders) {
+  function renderSection(sec, items, ladders, emptyNote) {
     var body = [];
     if (ladders.length) {
       body.push(h('div', { class: 'ladders' }, ladders.map(renderLadder)));
@@ -577,7 +585,7 @@
     if (items.length) {
       body.push(h('div', { class: 'items' }, items.map(function (it) { return renderItem(it, sec.key); })));
     }
-    if (!items.length && sec.key === 'lessons') {
+    if (!items.length && emptyNote) {
       body.push(h('p', { class: 'muted small', text: 'Магазин пуст: загрузи каркас посмертия кнопкой «Каркас».' }));
     }
     return h('section', { class: 'sec', dataset: { section: sec.key }, id: 'sec-' + sec.key }, [
@@ -1100,9 +1108,7 @@
       nav.textContent = '';
       nav.appendChild(h('h3', { text: 'Секции' }));
       summary.sections.forEach(function (s) {
-        // Уроки с фиксированной ценой живут в магазине рядом с обычными,
-        // поэтому ссылка ведёт к общему разделу «Уроки».
-        var anchor = s.key === 'fixed' ? 'sec-lessons' : 'sec-' + s.key;
+        var anchor = 'sec-' + s.key;
         nav.appendChild(h('a', {
           href: '#' + anchor, class: 'nav-link',
           onclick: function (e) {

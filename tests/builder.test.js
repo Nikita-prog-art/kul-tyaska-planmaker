@@ -459,6 +459,28 @@ test('порядок строк в уроках повторяет очеред�
   assert.ok(lessonTitles(d)[0].indexOf('поцелуй') === 0, 'поцелуй Мелисандры остался первым');
 });
 
+test('фиксированные уроки в конструкторе — отдельный раздел', () => {
+  const d = bootPage(JSON.parse(JSON.stringify(plan))).document;
+  const fixed = d.querySelector('#sec-fixed');
+  assert.ok(fixed, 'раздел «Уроки с фиксированной ценой» отрисован');
+
+  const titles = Array.from(fixed.querySelectorAll('.row.item .item-title'))
+    .map((x) => x.textContent.replace(/\s+/g, ' ').trim());
+  assert.ok(titles.some((t) => t.indexOf('Дева-в-Беде') >= 0), 'фиксированный урок в своём разделе: ' + titles.join(' | '));
+  assert.strictEqual(d.querySelectorAll('#sec-lessons .row.item[data-key="lesson:professionalnaya_deva"]').length, 0,
+    'и не стоит среди нумерованных');
+  assert.ok(d.querySelectorAll('#sec-lessons .row.item').length > 5, 'нумерованные уроки остались на месте');
+
+  // Раздел показывает свою сумму и остаток: они не смешиваются с уроками.
+  const head = fixed.querySelector('.sec-head').textContent.replace(/\s+/g, ' ');
+  assert.ok(/сумма 5 · ост\./.test(head), 'у раздела своя сумма: ' + head);
+
+  // Навигация ведёт к разделу, а кнопка раскладки живёт только в «Уроках».
+  const nav = Array.from(d.querySelectorAll('#kt-nav .nav-link')).map((a) => a.getAttribute('href'));
+  assert.ok(nav.indexOf('#sec-fixed') >= 0, 'навигация знает про отдельный раздел: ' + nav.join(' '));
+  assert.strictEqual(fixed.querySelector('.sec-tools'), null, 'кнопка «Разложить» не касается фиксированных');
+});
+
 test('повторяемую покупку можно взять дважды', () => {
   const w = bootPage(JSON.parse(JSON.stringify(plan)));
   const d = w.document;
