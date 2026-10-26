@@ -198,6 +198,126 @@ func TestSummaryWarningsAndSections(t *testing.T) {
 	}
 }
 
+// TestFixedLessonsHaveOwnSection — уроки с фиксированной ценой (трофеи и
+// покупки за фиксированные XP) печатаются отдельным разделом: в общую
+// нумерацию они не лезут, а в строке уроков им делать нечего.
+func TestFixedLessonsHaveOwnSection(t *testing.T) {
+	sk := presetSkeleton(t)
+	p := sk.NewPlan("u", "Фиксированные", "")
+	p.Picks = append(p.Picks, plan.Pick{Key: "lesson:professionalnaya_deva"})
+	p.Normalize()
+	sum := plan.Compute(p)
+
+	var lessons, fixed *plan.SectionSummary
+	for i := range sum.Sections {
+		switch sum.Sections[i].Key {
+		case plan.SecLessons:
+			lessons = &sum.Sections[i]
+		case plan.SecFixed:
+			fixed = &sum.Sections[i]
+		}
+	}
+	if lessons == nil || fixed == nil {
+		t.Fatalf("ждал разделы уроков и фиксированных уроков, получил %+v", sum.Sections)
+	}
+	for _, l := range lessons.Lines {
+		if l.Fixed {
+			t.Errorf("фиксированный урок остался в общем разделе: %q", l.Title)
+		}
+	}
+	found := false
+	for _, l := range fixed.Lines {
+		if l.Key == "lesson:professionalnaya_deva" {
+			found = true
+			if l.Number != 0 {
+				t.Errorf("фиксированный урок получил номер %d", l.Number)
+			}
+		}
+	}
+	if !found {
+		t.Error("«профессиональная Дева-в-Беде» не попала в свой раздел")
+	}
+
+	txt := plan.Render(p, sum)
+	if !strings.Contains(txt, "Уроки с фиксированной ценой:") {
+		t.Errorf("в тексте плана нет раздела фиксированных уроков:\n%s", txt)
+	}
+	// Уроки идут одной строкой: «Уроки: 1. … — 5, 2. … — 10».
+	var lessonLines int
+	for _, line := range strings.Split(txt, "\n") {
+		if strings.HasPrefix(line, "Уроки: ") {
+			lessonLines++
+		}
+	}
+	if lessonLines != 1 {
+		t.Errorf("ждал одну строку уроков, получил %d:\n%s", lessonLines, txt)
+	}
+	if strings.Contains(txt, "- профессиональная Дева-в-Беде") == false {
+		t.Error("фиксированный урок не напечатан отдельной строкой")
+	}
+}
+
+// TestDuplicateLadderItemDropped — покупка, которая повторяет шкалу
+// («шанс «один на миллиард»» был и ступенью, и галочкой), из плана уходит:
+// иначе одну позицию можно было взять дважды за 400 XP.
+func TestDuplicateLadderItemDropped(t *testing.T) {
+	sk := presetSkeleton(t)
+	p := sk.NewPlan("u", "Миллиард", "")
+	// Так выглядел план, сохранённый до правки каркаса.
+	p.Shop = append(p.Shop, plan.ShopItem{
+		Key: "chance:odin_na_milliard", Kind: plan.KindItem, Section: plan.SecChances,
+		Title: "шанс «один на миллиард»", Cost: 200, Fixed: true,
+	})
+	p.Picks = append(p.Picks, plan.Pick{Key: "chance:odin_na_milliard"})
+	if l := p.Ladder("chance.billion"); l != nil {
+		l.Value = 3
+	}
+	p.Normalize()
+
+	if p.Item("chance:odin_na_milliard") != nil {
+		t.Error("покупка-дубль осталась в магазине")
+	}
+	for _, pk := range p.Picks {
+		if pk.Key == "chance:odin_na_milliard" {
+			t.Error("выбор покупки-дубля остался в плане")
+		}
+	}
+	var chances *plan.SectionSummary
+	sum := plan.Compute(p)
+	for i := range sum.Sections {
+		if sum.Sections[i].Key == plan.SecChances {
+			chances = &sum.Sections[i]
+		}
+	}
+	if chances == nil {
+		t.Fatal("раздел «Шансы» пропал: ступень должна была остаться")
+	}
+	if len(chances.Lines) != 1 || chances.Lines[0].Key != "chance.billion" {
+		t.Fatalf("в «Шансах» ждал одну ступень, получил %+v", chances.Lines)
+	}
+	if chances.Sum != 200 {
+		t.Errorf("ступень стоит 200 XP, а не %v", chances.Sum)
+	}
+}
+
+// TestExportListsOnlyTaken — «не активирую» и «оставляю в библиотеке»
+// в план не печатаются: список того, что не берём, только занимает место.
+func TestExportListsOnlyTaken(t *testing.T) {
+	sk := presetSkeleton(t)
+	p := sk.NewPlan("u", "Тихий", "")
+	sum := plan.Compute(p)
+	txt := plan.Render(p, sum)
+	if strings.Contains(txt, "не активирую") {
+		t.Errorf("в плане остался список «не активирую»:\n%s", txt)
+	}
+	if strings.Contains(txt, "оставляю в библиотеке") {
+		t.Errorf("в плане остался список «оставляю в библиотеке»:\n%s", txt)
+	}
+	if strings.Contains(txt, "Активация накопителей:") {
+		t.Error("блок активации напечатан, хотя активировать нечего")
+	}
+}
+
 func TestParseSkeletonValidation(t *testing.T) {
 	if _, err := plan.ParseSkeleton([]byte(`{"name":"пусто","shop":[]}`)); err == nil {
 		t.Error("пустой каркас должен отвергаться")

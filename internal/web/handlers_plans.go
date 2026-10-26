@@ -276,6 +276,7 @@ func (s *Server) handlePlanExport(w http.ResponseWriter, r *http.Request) {
 		"title": "Экспорт: " + p.Title, "nav": "plans",
 		"plan": planView(p), "summary": summaryView(sum), "export_text": text,
 		"total": trim(p, sum.Total), "remainder": trim(p, sum.Remainder),
+		"lessons": countLessons(p),
 	})
 }
 

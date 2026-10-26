@@ -410,9 +410,10 @@
     if (!accs.length && !folios.length) return null;
     var body = [
       h('h3', { text: 'Накопители и фолианты' }),
-      h('div', { class: 'muted small', text: 'Отметь, что активируешь и какие фолианты берёшь с собой. Брать фолиант бесплатно: цена — это покупки «взять фолиант» и «выкупить метод» в магазине.' })
+      h('p', { class: 'muted small card-note', text: 'Отметь, что активируешь и какие фолианты берёшь с собой. Брать фолиант бесплатно: цена — это покупки «взять фолиант» и «выкупить метод» в магазине.' })
     ];
     if (accs.length) {
+      body.push(h('h4', { class: 'attach-sub', text: 'Накопители' }));
       body.push(h('div', { class: 'attach-list' }, accs.map(function (a) {
         var st = KT.accumulatorState(plan, a);
         // Заряды печатаем, только если они вообще известны: с учётом покупок
@@ -437,6 +438,7 @@
       })));
     }
     if (folios.length) {
+      body.push(h('h4', { class: 'attach-sub', text: 'Фолианты' }));
       body.push(h('div', { class: 'attach-list' }, folios.map(function (f) {
         var st = KT.folioState(plan, f);
         // Когда каркас не знает условий, показываем как раньше цену выкупа.
@@ -1098,11 +1100,14 @@
       nav.textContent = '';
       nav.appendChild(h('h3', { text: 'Секции' }));
       summary.sections.forEach(function (s) {
+        // Уроки с фиксированной ценой живут в магазине рядом с обычными,
+        // поэтому ссылка ведёт к общему разделу «Уроки».
+        var anchor = s.key === 'fixed' ? 'sec-lessons' : 'sec-' + s.key;
         nav.appendChild(h('a', {
-          href: '#sec-' + s.key, class: 'nav-link',
+          href: '#' + anchor, class: 'nav-link',
           onclick: function (e) {
             e.preventDefault();
-            var el = document.getElementById('sec-' + s.key);
+            var el = document.getElementById(anchor);
             if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }
         }, [

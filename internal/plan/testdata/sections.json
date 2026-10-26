@@ -6,63 +6,69 @@
     "order": 1
   },
   {
+    "key": "fixed",
+    "title": "Уроки с фиксированной ценой",
+    "hint": "трофеи и покупки, которые не занимают номер",
+    "order": 2
+  },
+  {
     "key": "patches",
     "title": "Заплатки",
     "hint": "бесплатные и платные правки правил",
-    "order": 2
+    "order": 3
   },
   {
     "key": "talent",
     "title": "Талант",
     "hint": "кости таланта и плоский бонус",
-    "order": 3
+    "order": 4
   },
   {
     "key": "roots",
     "title": "Чистота корней",
     "hint": "максимум и минимум",
-    "order": 4
+    "order": 5
   },
   {
     "key": "chances",
     "title": "Шансы",
     "hint": "«один на миллион» и «один на миллиард»",
-    "order": 5
+    "order": 6
   },
   {
     "key": "accumulators",
     "title": "Накопители",
     "hint": "заряжаются за прожитые жизни",
-    "order": 6
+    "order": 7
   },
   {
     "key": "physique",
     "title": "Телосложения",
     "hint": "активное и неактивные",
-    "order": 7
+    "order": 8
   },
   {
     "key": "bloodline",
     "title": "Родословные",
     "hint": "активная и неактивные",
-    "order": 8
+    "order": 9
   },
   {
     "key": "trainings",
     "title": "Тренировки и навыки",
     "hint": "постоянные бонусы",
-    "order": 9
+    "order": 10
   },
   {
     "key": "folio",
     "title": "Фолианты",
     "hint": "методы и техники в библиотеке",
-    "order": 10
+    "order": 11
   },
   {
     "key": "other",
     "title": "Прочее",
     "hint": "всё остальное",
-    "order": 11
+    "order": 12
   }
 ]

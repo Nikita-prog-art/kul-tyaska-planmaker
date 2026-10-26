@@ -219,7 +219,9 @@ test('«невыученный» освобождает урок от оплат
   const st = stateText();
   assert.ok(st.deferred.some((d) => /da_sdohni/.test(d.key)), 'урок ушёл в отложенные');
   assert.ok(!st.picks.some((p) => /da_sdohni/.test(p.key)), 'и убрался из покупок');
-  assert.ok(exportText().indexOf('невыученный, в следующую жизнь') >= 0, 'в экспорте помечен как невыученный');
+  const txt = exportText();
+  assert.ok(/Невыученные:[^\n]*да сдохни же ты наконец!/.test(txt), 'в «Невыученных» урок назван');
+  assert.ok(!/^Уроки:[^\n]*да сдохни/m.test(txt), 'в строке уроков его больше нет: он бесплатный');
 });
 
 test('«не беру» попадает в раздел «Не взято»', () => {
@@ -485,6 +487,8 @@ test('накопители и фолианты отмечаются отдель
   const d = bootPage(JSON.parse(JSON.stringify(plan))).document;
   const card = d.querySelector('#kt-attach');
   assert.ok(card, 'панель отметок отрисована');
+  const subs = Array.prototype.map.call(card.querySelectorAll('.attach-sub'), (x) => x.textContent);
+  assert.deepStrictEqual(subs, ['Накопители', 'Фолианты'], 'у каждого списка своя подпись и отступы');
 
   const find = (re) => Array.prototype.find.call(card.querySelectorAll('.attach'), (l) => re.test(l.textContent));
   assert.strictEqual(find(/хардкор/).querySelector('input').checked, true, 'купленный накопитель уже отмечен к активации');
@@ -493,10 +497,15 @@ test('накопители и фолианты отмечаются отдель
   // Фолиант, который берут с собой, отмечается вручную и виден в выгрузке.
   const tuman = find(/Непроглядного Тумана/);
   assert.strictEqual(tuman.querySelector('input').checked, true, 'фолиант отмечен к переносу');
+  assert.ok(/беру с собой:[^\n]*Непроглядного/.test(d.getElementById('kt-export-text').value),
+    'отмеченный фолиант есть в «беру с собой»');
   tuman.querySelector('input').click();
   const txt = d.getElementById('kt-export-text').value;
   assert.ok(!/беру с собой:[^\n]*Непроглядного/.test(txt), 'ушёл из «беру с собой»');
-  assert.ok(/оставляю в библиотеке:[^\n]*Непроглядного/.test(txt), 'попал в «оставляю в библиотеке»');
+  // Ничего не берём — блок про фолианты в выгрузке не печатается вовсе:
+  // список «оставляю в библиотеке» только занимал место.
+  assert.ok(!/беру с собой/.test(txt), 'блок «беру с собой» пропал целиком');
+  assert.ok(!/оставляю в библиотеке/.test(txt), 'списка «оставляю в библиотеке» больше нет');
 });
 
 test('«минимум n-м уроком» зеленеет, когда условие выполнено', () => {
@@ -752,12 +761,16 @@ test('«Разложить уроки» не спотыкается о фикс�
   assert.ok(at('lesson:ping_sistem') < at('lesson:posledniy_boy'),
     '«последний бой» идёт после «пинг систем» — награда за порядок');
   // Обязательная заплатка осталась на своём месте, а урок с фиксированной
-  // ценой так и не получил номера — его не раскладывали.
+  // ценой так и не получил номера — его не раскладывали, он живёт в своём
+  // разделе «Уроки с фиксированной ценой».
   assert.strictEqual(at('patch:otkluchenie_trenirovok'), 1, 'обязательная заплатка не сдвинулась');
-  const deva = sum.sections.filter((s) => s.key === 'lessons')[0].lines
-    .filter((l) => l.key === 'lesson:professionalnaya_deva')[0];
+  const fixedSec = sum.sections.filter((s) => s.key === 'fixed')[0];
+  assert.ok(fixedSec, 'у фиксированных уроков свой раздел');
+  const deva = fixedSec.lines.filter((l) => l.key === 'lesson:professionalnaya_deva')[0];
   assert.ok(deva && deva.fixed && !deva.number,
     'урок с фиксированной ценой номера не получил: ' + JSON.stringify(deva));
+  assert.ok(!d.getElementById('kt-export-text').value.includes('профессиональная Дева-в-Беде: 5, '),
+    'фиксированный урок не попал в нумерованную строку уроков');
 
   // Повторный клик: менять нечего, и это видно.
   btn.click();

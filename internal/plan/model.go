@@ -2,7 +2,10 @@
 // (магазин посмертия) и движок подсчёта стоимости.
 package plan
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // Kind — тип записи магазина.
 const (
@@ -17,7 +20,11 @@ const (
 
 // Секции плана (порядок отображения и суммирования).
 const (
-	SecLessons      = "lessons"
+	SecLessons = "lessons"
+	// SecFixed — уроки с фиксированной ценой: трофеи и покупки, которые
+	// не занимают номер и не поднимают цену следующих. В плане это отдельный
+	// раздел, чтобы нумерация уроков не перемешивалась с ними.
+	SecFixed        = "fixed"
 	SecAccumulators = "accumulators"
 	SecTalent       = "talent"
 	SecRoots        = "roots"
@@ -297,6 +304,7 @@ func (p *Plan) Normalize() {
 			l.Title = l.Key
 		}
 	}
+	p.dropLadderDuplicates()
 	// Количество покупок не выходит за разрешённый повтор.
 	for i := range p.Picks {
 		pk := &p.Picks[i]
@@ -322,6 +330,72 @@ func (p *Plan) Normalize() {
 	// Отметки «активирую» и «беру» план обязан заслужить: накопитель —
 	// зарядом, фолиант — уроком метода и выкупом.
 	p.pruneAttachments()
+}
+
+// dropLadderDuplicates убирает покупки, которые повторяют шкалу: каркас одно
+// время привозил «шанс «один на миллиард»» дважды — ступенью в «Шансах» и
+// такой же галочкой в магазине, — так что одну и ту же позицию можно было
+// взять за 400 XP. Шкала помнит, сколько ступеней уже куплено, поэтому
+// остаётся она; покупка и её выбор из плана уходят.
+func (p *Plan) dropLadderDuplicates() {
+	if len(p.Ladders) == 0 || len(p.Shop) == 0 {
+		return
+	}
+	dupes := map[string]bool{}
+	for _, l := range p.Ladders {
+		if l.Hidden || l.Section == "" || l.Title == "" {
+			continue
+		}
+		dupes[dedupeKey(l.Section, ladderBaseTitle(l.Title))] = true
+	}
+	if len(dupes) == 0 {
+		return
+	}
+	removed := map[string]bool{}
+	keep := make([]ShopItem, 0, len(p.Shop))
+	for _, it := range p.Shop {
+		if it.Kind != KindLadder && dupes[dedupeKey(it.Section, it.Title)] {
+			removed[it.Key] = true
+			continue
+		}
+		keep = append(keep, it)
+	}
+	if len(removed) == 0 {
+		return
+	}
+	p.Shop = keep
+	picks := make([]Pick, 0, len(p.Picks))
+	for _, pk := range p.Picks {
+		if !removed[pk.Key] {
+			picks = append(picks, pk)
+		}
+	}
+	p.Picks = picks
+	left := make([]string, 0, len(p.NotTaken))
+	for _, key := range p.NotTaken {
+		if !removed[key] {
+			left = append(left, key)
+		}
+	}
+	p.NotTaken = left
+}
+
+// ladderBaseTitle отбрасывает у названия шкалы слово «ступень», чтобы
+// сравнить её с покупкой: «шанс «один на миллиард», ступень» и «шанс «один
+// на миллиард»» — это одна и та же позиция.
+func ladderBaseTitle(title string) string {
+	t := strings.TrimSpace(title)
+	for _, cut := range []string{", ступень", " (ступень)"} {
+		if strings.HasSuffix(t, cut) {
+			return strings.TrimSpace(strings.TrimSuffix(t, cut))
+		}
+	}
+	return t
+}
+
+// dedupeKey — ключ сравнения позиций: секция плюс название без регистра.
+func dedupeKey(section, title string) string {
+	return strings.ToLower(strings.TrimSpace(section) + "\x00" + strings.TrimSpace(title))
 }
 
 // enforceLocked доставляет в план позиции, которые он обязан содержать

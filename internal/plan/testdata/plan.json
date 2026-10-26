@@ -1,5 +1,5 @@
 {
-  "id": "74446c1c5e7a6a07d1096789",
+  "id": "dff35569e3709fdbecdf6852",
   "user_id": "user-1",
   "title": "План «всё влезет»",
   "emoji": "🔥",
@@ -631,17 +631,6 @@
         "lesson:metod_ognennogo_dozhdya"
       ],
       "desc": "Выкуп фолианта обычного качества (метод Огненного Дождя). Выкуп не заменяет урок."
-    },
-    {
-      "key": "chance:odin_na_milliard",
-      "section": "chances",
-      "kind": "item",
-      "title": "шанс «один на миллиард»",
-      "cost": 200,
-      "fixed": true,
-      "min_lesson": 1,
-      "once": false,
-      "desc": "Отдельный раздел шансов. Подробности не разъясняются."
     }
   ],
   "picks": [

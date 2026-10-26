@@ -83,16 +83,17 @@ type Section struct {
 // Sections — упорядоченный список секций плана.
 var Sections = []Section{
 	{Key: SecLessons, Title: "Уроки", Hint: "первый урок 5 XP, каждый следующий на 5 XP дороже", Order: 1},
-	{Key: SecPatches, Title: "Заплатки", Hint: "бесплатные и платные правки правил", Order: 2},
-	{Key: SecTalent, Title: "Талант", Hint: "кости таланта и плоский бонус", Order: 3},
-	{Key: SecRoots, Title: "Чистота корней", Hint: "максимум и минимум", Order: 4},
-	{Key: SecChances, Title: "Шансы", Hint: "«один на миллион» и «один на миллиард»", Order: 5},
-	{Key: SecAccumulators, Title: "Накопители", Hint: "заряжаются за прожитые жизни", Order: 6},
-	{Key: SecPhysique, Title: "Телосложения", Hint: "активное и неактивные", Order: 7},
-	{Key: SecBloodline, Title: "Родословные", Hint: "активная и неактивные", Order: 8},
-	{Key: SecTrainings, Title: "Тренировки и навыки", Hint: "постоянные бонусы", Order: 9},
-	{Key: SecFolio, Title: "Фолианты", Hint: "методы и техники в библиотеке", Order: 10},
-	{Key: SecOther, Title: "Прочее", Hint: "всё остальное", Order: 11},
+	{Key: SecFixed, Title: "Уроки с фиксированной ценой", Hint: "трофеи и покупки, которые не занимают номер", Order: 2},
+	{Key: SecPatches, Title: "Заплатки", Hint: "бесплатные и платные правки правил", Order: 3},
+	{Key: SecTalent, Title: "Талант", Hint: "кости таланта и плоский бонус", Order: 4},
+	{Key: SecRoots, Title: "Чистота корней", Hint: "максимум и минимум", Order: 5},
+	{Key: SecChances, Title: "Шансы", Hint: "«один на миллион» и «один на миллиард»", Order: 6},
+	{Key: SecAccumulators, Title: "Накопители", Hint: "заряжаются за прожитые жизни", Order: 7},
+	{Key: SecPhysique, Title: "Телосложения", Hint: "активное и неактивные", Order: 8},
+	{Key: SecBloodline, Title: "Родословные", Hint: "активная и неактивные", Order: 9},
+	{Key: SecTrainings, Title: "Тренировки и навыки", Hint: "постоянные бонусы", Order: 10},
+	{Key: SecFolio, Title: "Фолианты", Hint: "методы и техники в библиотеке", Order: 11},
+	{Key: SecOther, Title: "Прочее", Hint: "всё остальное", Order: 12},
 }
 
 // SectionTitle возвращает заголовок секции по ключу.

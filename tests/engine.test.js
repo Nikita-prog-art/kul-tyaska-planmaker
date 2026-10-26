@@ -105,6 +105,29 @@ test('фиксированная цена не съедает номер уро�
   assert.deepStrictEqual(numbered, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
 });
 
+test('фиксированные уроки живут в своём разделе', () => {
+  const summary = KT.computeSummary(plan, sections);
+  const lessons = summary.sections.filter((s) => s.key === 'lessons')[0];
+  const fixed = summary.sections.filter((s) => s.key === 'fixed')[0];
+  assert.ok(fixed, 'раздел «Уроки с фиксированной ценой» есть');
+  assert.ok(lessons.lines.every((l) => !l.fixed), 'в общем разделе фиксированных нет');
+  assert.ok(fixed.lines.length > 0 && fixed.lines.every((l) => l.fixed && !l.number), 'у фиксированных нет номеров');
+});
+
+test('уроки печатаются одной строкой', () => {
+  const lines = golden.split('\n').filter((l) => l.indexOf('Уроки: ') === 0);
+  assert.strictEqual(lines.length, 1, 'строка уроков одна: ' + lines.length);
+  assert.ok(/^Уроки: 1\. /.test(lines[0]), 'нумерация начинается с первого урока');
+  assert.ok(golden.indexOf('Уроки с фиксированной ценой:') >= 0, 'фиксированные — отдельным разделом');
+});
+
+test('в плане только то, что берём', () => {
+  assert.ok(golden.indexOf('не активирую') < 0, 'списка «не активирую» нет');
+  assert.ok(golden.indexOf('оставляю в библиотеке') < 0, 'списка «оставляю в библиотеке» нет');
+  assert.ok(/активирую: хардкор/.test(golden), 'активируемый накопитель назван');
+  assert.ok(/беру с собой: метод Непроглядного Тумана/.test(golden), 'взятый фолиант назван');
+});
+
 test('накопитель активируется, только если заряжен или куплен', () => {
   const byName = (n) => plan.accumulators.filter((a) => a.name.indexOf(n) >= 0)[0];
   // «горожане»: 0,8 заряда — целого заряда ещё нет (прибавка за жизнь

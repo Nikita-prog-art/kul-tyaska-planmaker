@@ -78,8 +78,12 @@ func Compute(p *Plan) *Summary {
 			continue
 		}
 		l := Line{Key: item.Key, Title: displayTitle(item), Fixed: item.Fixed}
+		section := SecLessons
 		if item.Fixed {
+			// Фиксированная цена — отдельный раздел: номер такие уроки
+			// не занимают и в счётчик уроков не идут.
 			l.Cost = item.Cost
+			section = SecFixed
 		} else {
 			paidIdx++
 			l.Number = paidIdx
@@ -95,7 +99,7 @@ func Compute(p *Plan) *Summary {
 			}
 		}
 		total += l.Cost
-		lines[SecLessons] = append(lines[SecLessons], l)
+		lines[section] = append(lines[section], l)
 	}
 
 	// Позиции, которые план обязан содержать, и условия каркаса.

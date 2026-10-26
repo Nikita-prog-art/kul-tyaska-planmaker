@@ -22,6 +22,11 @@ func Render(p *Plan, s *Summary) string {
 	}
 
 	for _, sec := range s.Sections {
+		// Уроки идут одной строкой: «1. поцелуй Мелисандры: 5, 2. …».
+		if sec.Key == SecLessons {
+			writeLessonsLine(&b, p, sec)
+			continue
+		}
 		fmt.Fprintf(&b, "%s:\n", sec.Title)
 		for _, l := range sec.Lines {
 			title := l.Title
@@ -45,47 +50,32 @@ func Render(p *Plan, s *Summary) string {
 	}
 
 	// Накопители и фолианты — отдельными строками, как требует формат.
-	var act, skip []string
+	// Перечисляем только то, что берём: список «не активирую» и «оставляю
+	// в библиотеке» ничего не добавляет, а место в сообщении занимает.
+	var act []string
 	for i := range p.Accumulators {
-		line := accumulatorLine(p, &p.Accumulators[i])
-		if p.Accumulators[i].Activate {
-			act = append(act, line)
-		} else {
-			skip = append(skip, line)
+		if !p.Accumulators[i].Activate {
+			continue
 		}
+		act = append(act, accumulatorLine(p, &p.Accumulators[i]))
 	}
-	if len(act) > 0 || len(skip) > 0 {
-		b.WriteString("Активация накопителей:\n")
-		if len(act) > 0 {
-			fmt.Fprintf(&b, "  - активирую: %s\n", strings.Join(act, "; "))
-		}
-		if len(skip) > 0 {
-			fmt.Fprintf(&b, "  - не активирую: %s\n", strings.Join(skip, "; "))
-		}
-		b.WriteString("\n")
+	if len(act) > 0 {
+		fmt.Fprintf(&b, "Активация накопителей:\n  - активирую: %s\n\n", strings.Join(act, "; "))
 	}
 
-	var take, keep []string
+	var take []string
 	for _, f := range p.Folios {
+		if !f.Take {
+			continue
+		}
 		line := f.Name
 		if f.Note != "" {
 			line += " (" + f.Note + ")"
 		}
-		if f.Take {
-			take = append(take, line)
-		} else {
-			keep = append(keep, line)
-		}
+		take = append(take, line)
 	}
-	if len(take) > 0 || len(keep) > 0 {
-		b.WriteString("Фолианты:\n")
-		if len(take) > 0 {
-			fmt.Fprintf(&b, "  - беру с собой: %s\n", strings.Join(take, "; "))
-		}
-		if len(keep) > 0 {
-			fmt.Fprintf(&b, "  - оставляю в библиотеке: %s\n", strings.Join(keep, "; "))
-		}
-		b.WriteString("\n")
+	if len(take) > 0 {
+		fmt.Fprintf(&b, "Фолианты:\n  - беру с собой: %s\n\n", strings.Join(take, "; "))
 	}
 
 	if len(s.DeferredUsedKeys(p)) > 0 {
@@ -129,6 +119,24 @@ func Render(p *Plan, s *Summary) string {
 		fmt.Fprintf(&b, "\n%s\n", strings.TrimSpace(p.Notes))
 	}
 	return b.String()
+}
+
+// writeLessonsLine печатает уроки одной строкой, как требует формат плана:
+// «Уроки: 1. поцелуй Мелисандры: 5 (уже куплено), 2. да сдохни же ты наконец!: 10».
+// Отложенные уроки сюда не попадают: они бесплатны и перечислены в «Невыученных».
+func writeLessonsLine(b *strings.Builder, p *Plan, sec SectionSummary) {
+	var parts []string
+	for _, l := range sec.Lines {
+		if l.Number == 0 {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%d. %s: %s%s", l.Number, l.Title, money(p, l.Cost), noteSuffix(l.Note)))
+	}
+	if len(parts) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "%s: %s\n", sec.Title, strings.Join(parts, ", "))
+	fmt.Fprintf(b, "  Сумма: %s, ост. %s\n\n", money(p, sec.Sum), money(p, sec.Remainder))
 }
 
 // accumulatorLine печатает накопитель с состоянием на момент перерождения:

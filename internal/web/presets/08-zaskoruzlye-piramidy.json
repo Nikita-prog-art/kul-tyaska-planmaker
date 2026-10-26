@@ -477,15 +477,6 @@
       "fixed": true,
       "requires": ["lesson:metod_ognennogo_dozhdya"],
       "desc": "Выкуп фолианта обычного качества (метод Огненного Дождя). Выкуп не заменяет урок."
-    },
-    {
-      "key": "chance:odin_na_milliard",
-      "kind": "item",
-      "section": "chances",
-      "title": "шанс «один на миллиард»",
-      "cost": 200,
-      "fixed": true,
-      "desc": "Отдельный раздел шансов. Подробности не разъясняются."
     }
   ],
   "ladders": [

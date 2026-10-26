@@ -77,8 +77,11 @@
       var it = items[pk.key];
       if (!it || it.kind !== 'lesson' || deferredKeys[pk.key]) return;
       var line = { key: it.key, title: it.title, fixed: !!it.fixed, cost: 0, number: 0 };
+      var section = 'lessons';
       if (it.fixed) {
+        // Фиксированная цена — отдельный раздел: номер такие уроки не занимают.
         line.cost = Number(it.cost) || 0;
+        section = 'fixed';
       } else {
         paid++;
         line.number = paid;
@@ -92,7 +95,7 @@
         }
       }
       total += line.cost;
-      (bySection.lessons = bySection.lessons || []).push(line);
+      (bySection[section] = bySection[section] || []).push(line);
     });
 
     // Позиции, которые план обязан содержать, и условия каркаса.
@@ -419,6 +422,17 @@
     }
 
     (summary.sections || []).forEach(function (sec) {
+      // Уроки идут одной строкой: «1. поцелуй Мелисандры: 5, 2. …».
+      if (sec.key === 'lessons') {
+        var parts = sec.lines.filter(function (l) { return l.number > 0; }).map(function (l) {
+          return l.number + '. ' + l.title + ': ' + fmt(l.cost, dec) + noteSuffix(l.note);
+        });
+        if (!parts.length) return;
+        out.push(sec.title + ': ' + parts.join(', '));
+        out.push('  Сумма: ' + fmt(sec.sum, dec) + ', ост. ' + fmt(sec.remainder, dec));
+        out.push('');
+        return;
+      }
       out.push(sec.title + ':');
       sec.lines.forEach(function (l) {
         var title = l.qty > 1 ? l.title + ' ×' + l.qty : l.title;
@@ -434,8 +448,11 @@
       out.push('');
     });
 
-    var act = [], skip = [];
+    // Перечисляем только то, что берём: «не активирую» и «оставляю
+    // в библиотеке» ничего не добавляют, а место в сообщении занимают.
+    var act = [];
     (plan.accumulators || []).forEach(function (a) {
+      if (!a.activate) return;
       // Если про заряды накопителя в тексте ничего нет, печатаем только имя.
       var line = a.name;
       if (accumulatorKnown(plan, a)) {
@@ -444,24 +461,22 @@
         if (v.rate) line += ', +' + number(v.rate) + '% за жизнь';
         line += ')';
       }
-      (a.activate ? act : skip).push(line);
+      act.push(line);
     });
-    if (act.length || skip.length) {
+    if (act.length) {
       out.push('Активация накопителей:');
-      if (act.length) out.push('  - активирую: ' + act.join('; '));
-      if (skip.length) out.push('  - не активирую: ' + skip.join('; '));
+      out.push('  - активирую: ' + act.join('; '));
       out.push('');
     }
 
-    var take = [], keep = [];
+    var take = [];
     (plan.folios || []).forEach(function (f) {
-      var line = f.name + (f.note ? ' (' + f.note + ')' : '');
-      (f.take ? take : keep).push(line);
+      if (!f.take) return;
+      take.push(f.name + (f.note ? ' (' + f.note + ')' : ''));
     });
-    if (take.length || keep.length) {
+    if (take.length) {
       out.push('Фолианты:');
-      if (take.length) out.push('  - беру с собой: ' + take.join('; '));
-      if (keep.length) out.push('  - оставляю в библиотеке: ' + keep.join('; '));
+      out.push('  - беру с собой: ' + take.join('; '));
       out.push('');
     }
 

@@ -5,30 +5,30 @@
 :root {
   color-scheme: dark;
 
-  /* поверхности */
-  --bg: #0c0e12;
-  --bg-2: #101319;
-  --surface: #151a22;
-  --surface-2: #1b212b;
-  --surface-3: #232a36;
-  --line: #2a313d;
-  --line-soft: #1f252f;
-  --topbar: rgba(12, 14, 18, .78);
+  /* поверхности: холодная ночная тушь, без сепии */
+  --bg: #0b0d10;
+  --bg-2: #0e1014;
+  --surface: #131720;
+  --surface-2: #191e27;
+  --surface-3: #212734;
+  --line: #283040;
+  --line-soft: #1d2430;
+  --topbar: rgba(11, 13, 16, .78);
 
-  /* текст */
-  --text: #ece7dc;
-  --text-soft: #d2ccc0;
-  --muted: #9b978d;
+  /* текст: почти нейтральный, лишь чуть прохладный */
+  --text: #e8e9ec;
+  --text-soft: #c2c7cf;
+  --muted: #8e95a0;
 
-  /* акценты: нефрит, золото, киноварь */
+  /* акценты: нефрит, бледное золото, киноварь */
   --jade: #84c9a4;
   --jade-bright: #b0e4cb;
   --jade-deep: #2f6350;
   --jade-rgb: 132, 201, 164;
-  --gold: #ddbd8a;
-  --gold-bright: #f0d7ae;
-  --gold-deep: #6d5836;
-  --gold-rgb: 221, 189, 138;
+  --gold: #d6cbae;
+  --gold-bright: #ece4cf;
+  --gold-deep: #5d5644;
+  --gold-rgb: 214, 203, 174;
   --blood: #d07167;
   --blood-bright: #f0b1aa;
   --blood-deep: #5e2a26;
@@ -40,9 +40,9 @@
   --shadow: 0 22px 50px rgba(0, 0, 0, .55);
   --shadow-soft: 0 2px 12px rgba(0, 0, 0, .22);
   --ring: 0 0 0 3px rgba(var(--jade-rgb), .16);
-  --glow-jade: rgba(var(--jade-rgb), .07);
-  --glow-gold: rgba(var(--gold-rgb), .06);
-  --glow-blue: rgba(122, 155, 214, .05);
+  --glow-jade: rgba(var(--jade-rgb), .06);
+  --glow-gold: rgba(var(--gold-rgb), .04);
+  --glow-blue: rgba(122, 155, 214, .07);
   --inset-light: rgba(255, 255, 255, .035);
 
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
@@ -139,8 +139,8 @@ body {
   min-height: 100vh;
   background:
     radial-gradient(900px 520px at 8% -12%, var(--glow-jade), transparent 62%),
-    radial-gradient(760px 420px at 98% -6%, var(--glow-gold), transparent 58%),
-    radial-gradient(680px 680px at 50% 118%, var(--glow-blue), transparent 62%),
+    radial-gradient(760px 420px at 98% -6%, var(--glow-blue), transparent 58%),
+    radial-gradient(680px 680px at 50% 118%, var(--glow-gold), transparent 62%),
     linear-gradient(180deg, var(--bg), var(--bg-2));
   background-attachment: fixed;
 }
@@ -639,8 +639,18 @@ input.num.ladder-owned {
 .item-qty .qty-value { font-family: var(--mono); font-size: 13px; color: var(--gold); min-width: 26px; text-align: center; }
 
 /* Накопители и фолианты: отметки, которых нет в магазине. */
-.attach-list { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
-.attach { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; cursor: pointer; color: var(--text-soft); }
+.card-note { margin: 0 0 4px; }
+.attach-sub {
+  margin: 12px 0 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.attach-sub + .attach-list { margin-top: 4px; }
+.attach-list { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
+.attach { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.45; cursor: pointer; color: var(--text-soft); }
 .attach input { accent-color: var(--jade); margin-top: 2px; }
 /* Отметка, которую план позволить не может: незаряженный накопитель,
    фолиант без урока метода и выкупа. */
