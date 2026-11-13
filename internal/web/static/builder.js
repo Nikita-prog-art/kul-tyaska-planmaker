@@ -1106,18 +1106,23 @@
       if (input && document.activeElement !== input) input.value = l.value;
     });
 
-    // суммы секций
-    var byKey = {};
-    summary.sections.forEach(function (s) { byKey[s.key] = s; });
-    Array.prototype.forEach.call(document.querySelectorAll('[data-section]'), function (secEl) {
+    // суммы секций: «ост.» — остаток после этой секции. Считаем по порядку
+    // отрисованных секций, а не по summary: в summary попадают только секции
+    // с покупками, и пустая секция показывала бы полный баланс вместо остатка
+    // после предыдущих — соседние «ост.» прыгали бы.
+    var sumByKey = {};
+    summary.sections.forEach(function (s) { sumByKey[s.key] = s.sum; });
+    var run = plan.balance;
+    Array.prototype.forEach.call(document.querySelectorAll('section[data-section]'), function (secEl) {
       var key = secEl.dataset.section;
+      var sum = sumByKey[key] || 0;
+      run -= sum;
       var holder = secEl.querySelector('[data-sum]');
       if (!holder) return;
-      var s = byKey[key];
       var sumB = holder.querySelectorAll('b')[0];
       var remB = holder.querySelectorAll('b')[1];
-      if (sumB) sumB.textContent = fmt(s ? s.sum : 0);
-      if (remB) remB.textContent = fmt(s ? s.remainder : plan.balance);
+      if (sumB) sumB.textContent = fmt(sum);
+      if (remB) remB.textContent = fmt(run);
     });
 
     // сайдбар

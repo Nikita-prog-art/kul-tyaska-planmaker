@@ -937,3 +937,23 @@ test('«не раньше N уроков» показывается и гасн�
   tag = rowByTitleIn(d, 'сосредоточенная месть').querySelector('[data-min-lessons]');
   assert.ok(tag.classList.contains('ok'), 'тег стал зелёным');
 });
+
+test('«ост.» в секциях идёт по порядку, даже если секция пустая', () => {
+  const p = miniPlan([
+    { key: 'lesson:a', kind: 'lesson', section: 'lessons', title: 'урок а', cost: 0 },
+    { key: 'patch:empty', kind: 'patch', section: 'patches', title: 'пустая заплатка', cost: 10, fixed: true },
+    { key: 'item:big', kind: 'item', section: 'other', title: 'большая покупка', cost: 100, fixed: true }
+  ]);
+  p.balance = 1000;
+  p.picks = [{ key: 'lesson:a' }, { key: 'item:big' }];
+  const w = bootPage(p);
+  const d = w.document;
+  const nums = (key) => Array.prototype.map.call(
+    d.querySelectorAll('#sec-' + key + ' [data-sum] b'), (b) => b.textContent);
+
+  assert.deepStrictEqual(nums('lessons'), ['5', '995'], 'после урока остаток 995');
+  assert.deepStrictEqual(nums('patches'), ['0', '995'],
+    'пустая секция не возвращает полный баланс: ост. тот же, что после уроков');
+  assert.deepStrictEqual(nums('other'), ['100', '895'], 'после покупки остаток 895');
+  assert.strictEqual(d.getElementById('sum-left').textContent, '895', 'сайдбар сходится с секциями');
+});
