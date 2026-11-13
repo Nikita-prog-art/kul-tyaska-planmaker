@@ -315,6 +315,25 @@ func TestLife9Preset(t *testing.T) {
 		it.Discounts[0].Key != "lesson:skidka_na_skidku" || it.Discounts[0].Amount != 100 {
 		t.Errorf("у постоянной скидки нет скидки за урок «скидка на скидку»: %+v", it)
 	}
+	// «Освоено» — пометка метода, а не фиксированная цена: перенесённый
+	// невыученными уроками метод остаётся обычным нумеруемым уроком.
+	if it := byKey["lesson:metod_neproglyadnogo_tumana"]; it == nil {
+		t.Error("в каркасе нет метода Непроглядного Тумана")
+	} else if it.Fixed {
+		t.Errorf("метод Непроглядного Тумана не должен быть фиксированным: %+v", it)
+	}
+	// Младшая тренировка удешевляет старшую на свою цену.
+	for key, want := range map[string]plan.PriceCut{
+		"item:uchenica_schita":            {Key: "item:novichok_schita", Amount: 3},
+		"item:novichok_cepa":              {Key: "item:diletantka_cepa", Amount: 2},
+		"item:novichok_bulavy":            {Key: "item:diletantka_bulavy", Amount: 2},
+		"item:novichok_bezoruzhnogo_boya": {Key: "item:diletantka_bezoruzhnogo_boya", Amount: 2},
+	} {
+		it := byKey[key]
+		if it == nil || len(it.Discounts) != 1 || it.Discounts[0] != want {
+			t.Errorf("%s: скидка за младшую тренировку %+v, а не %+v", key, it, want)
+		}
+	}
 	if it := byKey["revenge:sosredotochennaya_mest"]; it == nil || it.MinLessons != 10 {
 		t.Errorf("сосредоточенная месть не требует десяти уроков: %+v", it)
 	}

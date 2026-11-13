@@ -1335,6 +1335,105 @@ func TestItemDiscount(t *testing.T) {
 	}
 }
 
+// life9Skeleton читает готовый каркас жизни 9: на нём проверяются метод,
+// перенесённый невыученными уроками, и скидки тренировок.
+func life9Skeleton(t *testing.T) *plan.Skeleton {
+	t.Helper()
+	raw, err := os.ReadFile("../web/presets/09-kontinent-iskonnogo-balansa.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sk, err := plan.ParseSkeleton(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return sk
+}
+
+// TestFogMethodIsOrdinaryLesson — «метод Непроглядного Тумана (освоено)»,
+// перенесённый невыученными уроками, остаётся обычным уроком: занимает номер
+// и стоит по общему правилу. «Освоено» — пометка метода, а не fixed-цена.
+func TestFogMethodIsOrdinaryLesson(t *testing.T) {
+	sk := life9Skeleton(t)
+	p := sk.NewPlan("u", "туман", "")
+	p.Picks = []plan.Pick{{Key: "lesson:metod_neproglyadnogo_tumana"}}
+	p.Normalize()
+	sum := plan.Compute(p)
+	lessons := sectionByKey(t, sum, plan.SecLessons)
+	if len(lessons.Lines) != 1 {
+		t.Fatalf("ждал один урок, получил %+v", lessons.Lines)
+	}
+	line := lessons.Lines[0]
+	if line.Number != 1 || line.Cost != plan.LessonCost(1) {
+		t.Errorf("метод должен стоить как первый урок (%v), получил номер %d за %v",
+			plan.LessonCost(1), line.Number, line.Cost)
+	}
+	if line.Fixed {
+		t.Error("метод попал в уроки с фиксированной ценой")
+	}
+	if _, ok := lineByKey(sum, plan.SecFixed, "lesson:metod_neproglyadnogo_tumana"); ok {
+		t.Error("метод напечатан в разделе фиксированных уроков")
+	}
+}
+
+func lineByKey(sum *plan.Summary, section, key string) (plan.Line, bool) {
+	for _, sec := range sum.Sections {
+		if sec.Key != section {
+			continue
+		}
+		for _, l := range sec.Lines {
+			if l.Key == key {
+				return l, true
+			}
+		}
+	}
+	return plan.Line{}, false
+}
+
+// TestTrainingTierDiscount — покупка младшей тренировки удешевляет старшую
+// ровно на её цену, если обе взяты в одном посмертии.
+func TestTrainingTierDiscount(t *testing.T) {
+	sk := life9Skeleton(t)
+	pairs := []struct {
+		name                  string
+		lower, higher         string
+		lowerCost, higherCost float64
+	}{
+		{"щит", "item:novichok_schita", "item:uchenica_schita", 3, 8},
+		{"цеп", "item:diletantka_cepa", "item:novichok_cepa", 2, 5},
+		{"булава", "item:diletantka_bulavy", "item:novichok_bulavy", 2, 5},
+		{"безоружный бой", "item:diletantka_bezoruzhnogo_boya", "item:novichok_bezoruzhnogo_boya", 2, 5},
+	}
+	for _, tt := range pairs {
+		t.Run(tt.name, func(t *testing.T) {
+			only := sk.NewPlan("u", "старшая", "")
+			only.Picks = []plan.Pick{{Key: tt.higher}}
+			only.Normalize()
+			if got := only.ItemCost(only.Item(tt.higher)); got != tt.higherCost {
+				t.Errorf("без младшей старшая стоит %v, ждал %v", got, tt.higherCost)
+			}
+
+			both := sk.NewPlan("u", "обе", "")
+			both.Picks = []plan.Pick{{Key: tt.lower}, {Key: tt.higher}}
+			both.Normalize()
+			if got := both.ItemCost(both.Item(tt.higher)); got != tt.higherCost-tt.lowerCost {
+				t.Errorf("с младшей старшая стоит %v, ждал %v", got, tt.higherCost-tt.lowerCost)
+			}
+			sum := plan.Compute(both)
+			high, ok := lineByKey(sum, plan.SecTrainings, tt.higher)
+			if !ok {
+				t.Fatalf("старшей тренировки нет в выгрузке: %+v", sum.Sections)
+			}
+			if high.Cost != tt.higherCost-tt.lowerCost {
+				t.Errorf("в выгрузке старшая стоит %v, ждал %v", high.Cost, tt.higherCost-tt.lowerCost)
+			}
+			if got := sectionByKey(t, sum, plan.SecTrainings).Sum; got != tt.higherCost {
+				t.Errorf("обе тренировки стоят %v, ждал %v (цена старшей с учётом младшей)", got, tt.higherCost)
+			}
+		})
+	}
+}
+
 // TestSkeletonDiscountAndMinLessons — каркас понимает обе новые ручки:
 // скидку на цену и «не раньше N уроков» у не-урока.
 func TestSkeletonDiscountAndMinLessons(t *testing.T) {

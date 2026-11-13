@@ -246,6 +246,29 @@ test('скидка на цену пересчитывается без ручн�
   assert.strictEqual(KT.itemCost(p, p.shop[1]), 1000);
 });
 
+test('младшая тренировка удешевляет старшую на свою цену', () => {
+  const p = {
+    balance: 100, deferred: [], picks: [],
+    shop: [
+      { key: 'item:low', kind: 'item', section: 'trainings', title: 'дилетантка', cost: 2, fixed: true },
+      { key: 'item:high', kind: 'item', section: 'trainings', title: 'новичок', cost: 5, fixed: true,
+        discount: [{ key: 'item:low', amount: 2 }] }
+    ]
+  };
+  p.picks = [{ key: 'item:high' }];
+  assert.strictEqual(KT.itemCost(p, p.shop[1]), 5, 'без младшей старшая стоит полную цену');
+
+  p.picks = [{ key: 'item:low' }, { key: 'item:high' }];
+  assert.strictEqual(KT.itemCost(p, p.shop[1]), 3, 'младшая снимает свои 2 XP');
+  const sec = KT.computeSummary(p, sections).sections.filter((s) => s.key === 'trainings')[0];
+  assert.strictEqual(sec.sum, 5, 'вместе тренировки стоят как старшая: 2 + 3');
+
+  // Отложенная младшая скидку не даёт: она уедет в следующую жизнь.
+  p.picks = [{ key: 'item:high' }];
+  p.deferred = [{ key: 'item:low', slot: 1 }];
+  assert.strictEqual(KT.itemCost(p, p.shop[1]), 5);
+});
+
 test('«не раньше N уроков» у не-урока проверяется', () => {
   const p = {
     balance: 1000, deferred: [], picks: [{ key: 'revenge:conc' }],
