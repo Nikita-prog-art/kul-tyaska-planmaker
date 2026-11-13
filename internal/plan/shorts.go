@@ -30,6 +30,22 @@ var shortNames = map[string]string{
 	"lesson:metod_ognennogo_dozhdya":       "Дождь",
 	"lesson:nevyuchennye_uroki":            "невыученные",
 
+	// Уроки жизни 9.
+	"lesson:skidka_na_skidku":                     "скидка на скидку",
+	"lesson:gluboko_nevyuchennye_uroki":           "глубоко невыученные",
+	"lesson:skorost_zaradki_velikogo_uspeha":      "+скорость успеха",
+	"lesson:pogibel_prizrakov":                    "призраки",
+	"lesson:kkkkombo":                             "комбо",
+	"lesson:telesnaya_kultivaciya_dlya_chaynikov": "телесная культивация",
+	"lesson:metod_sily_yunosti":                   "Сила Юности",
+	"lesson:vnutrenniy_zhar":                      "внутренний жар",
+	"lesson:smertelno_opasnye_ekzameny":           "экзамены",
+	"lesson:demony_zdorovo":                       "демоны",
+	"lesson:plody_otravlennoy_palmy":              "Пальма",
+	"lesson:vmeste_veselee_cao":                   "Цао",
+	"lesson:rodoslovnaya_pylayuschego_varana":     "Варан",
+	"lesson:gruzite_essencii_kanistrami":          "эссенции",
+
 	// Заплатки.
 	"patch:otkluchenie_trenirovok": "без тренировок",
 	"patch:bliznecy":               "близнецы",
@@ -57,6 +73,27 @@ var shortNames = map[string]string{
 	"item:lestnica_v_nebo":    "лестница",
 	"item:ponaslyshke_mech":   "меч",
 
+	// Тренировки жизни 9.
+	"item:luk_lish_raz_v_zhizni":               "лук",
+	"item:novichok_schita":                     "новичок щита",
+	"item:uchenica_schita":                     "ученица щита",
+	"item:trenirovki_opytnogo_boyca_ataka":     "атака",
+	"item:trenirovki_boyca_zashita":            "защита",
+	"item:trenirovki_podmasterya_kopya":        "копьё подмастерья",
+	"item:uluchshennaya_trenirovka_nalozhnicy": "наложница",
+	"item:diletantka_cepa":                     "цеп",
+	"item:novichok_cepa":                       "цеп+",
+	"item:diletantka_bulavy":                   "булава",
+	"item:novichok_bulavy":                     "булава+",
+	"item:diletantka_bezoruzhnogo_boya":        "кулаки",
+	"item:novichok_bezoruzhnogo_boya":          "кулаки+",
+	"item:diletantka_kastetov":                 "кастеты",
+
+	// Месть жизни 9.
+	"revenge:keo_firun":              "Кео Фирун",
+	"revenge:monivong_dzhivan":       "Дживан",
+	"revenge:sosredotochennaya_mest": "сосредоточенная месть",
+
 	// Библиотека.
 	"folio:vzyat_1_foliant":            "1 фолиант",
 	"folio:vzyat_1_foliant_nakoplenie": "фолиант на Накоплении Ци",
@@ -67,6 +104,7 @@ var shortNames = map[string]string{
 	"folio:vykupit_in":                 "выкуп Инь",
 	"folio:vykupit_vodopad":            "выкуп Водопада",
 	"folio:vykupit_dozhd":              "выкуп Дождя",
+	"folio:vykupit_silu_yunosti":       "выкуп Силы Юности",
 
 	// Накопители в плане (ключи каркаса).
 	"acc:gorozhane":      "горожане",
@@ -74,6 +112,7 @@ var shortNames = map[string]string{
 	"acc:velikiy_uspeh":  "великий успех",
 	"acc:hardkor":        "хардкор",
 	"acc:ravnovesie":     "равновесие",
+	"acc:dzon_snou":      "Джон",
 
 	// Фолианты в библиотеке (ключи каркаса).
 	"folio:metod_neproglyadnogo_tumana": "Туман",
@@ -81,6 +120,7 @@ var shortNames = map[string]string{
 	"folio:metod_tonkogo_pogloscheniya": "Инь",
 	"folio:metod_ognennogo_vodopada":    "Водопад",
 	"folio:metod_ognennogo_dozhdya":     "Дождь",
+	"folio:metod_sily_yunosti":          "Сила Юности",
 
 	// Шкалы.
 	"talent.die":          "кость",

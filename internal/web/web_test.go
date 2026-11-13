@@ -3,6 +3,7 @@ package web_test
 import (
 	"encoding/json"
 	"io"
+	"math"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -249,6 +250,168 @@ func TestPresetServed(t *testing.T) {
 	}
 	if len(sk.Shop) < 30 {
 		t.Errorf("в каркасе мало позиций: %d", len(sk.Shop))
+	}
+}
+
+// TestLife9Preset — каркас жизни 9 на континенте Исконного баланса: в нём
+// только новое и ещё не купленное, накопители в том состоянии, которое
+// пережило жизнь 8, и выгрузка собирается из него без проверок.
+func TestLife9Preset(t *testing.T) {
+	c := newClient(t)
+	resp := c.do("GET", "/presets/09-kontinent-iskonnogo-balansa", nil)
+	raw, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("каркас: код %d", resp.StatusCode)
+	}
+	sk, err := plan.ParseSkeleton(raw)
+	if err != nil {
+		t.Fatalf("каркас не разбирается: %v", err)
+	}
+	if sk.Name != "Жизнь 9 · континент Исконного баланса" {
+		t.Errorf("название каркаса: %q", sk.Name)
+	}
+	if math.Abs(sk.Balance-458.19948) > 1e-9 {
+		t.Errorf("баланс: %v", sk.Balance)
+	}
+	if sk.DeferredSlots != 2 {
+		t.Errorf("слотов невыученных: %d, ждал 2", sk.DeferredSlots)
+	}
+	byKey := map[string]*plan.ShopItem{}
+	for i := range sk.Shop {
+		byKey[sk.Shop[i].Key] = &sk.Shop[i]
+	}
+	for key, cost := range map[string]float64{
+		"lesson:skidka_na_skidku":        0,
+		"lesson:plody_otravlennoy_palmy": 1,
+		"lesson:vmeste_veselee_cao":      5,
+		"item:diletantka_kastetov":       0,
+		"item:luk_lish_raz_v_zhizni":     5,
+		"revenge:monivong_dzhivan":       60,
+		"folio:vykupit_silu_yunosti":     20,
+	} {
+		it := byKey[key]
+		if it == nil {
+			t.Errorf("в каркасе нет позиции %q", key)
+			continue
+		}
+		if it.Cost != cost {
+			t.Errorf("%s: цена %v, ждал %v", key, it.Cost, cost)
+		}
+	}
+	for _, key := range []string{
+		"item:pererozhdenie_dzhona", "item:ravnovesie_zla_i_dobra", "item:hardkor",
+		"patch:otkluchenie_trenirovok", "folio:vykupit_miazmy", "folio:vzyat_posle_okraski",
+		"lesson:ping_sistem", "lesson:poceluy_melisandry",
+	} {
+		if byKey[key] != nil {
+			t.Errorf("в каркасе осталось купленное %q", key)
+		}
+	}
+	if it := byKey["revenge:monivong_dzhivan"]; it == nil || it.Section != plan.SecRevenge {
+		t.Errorf("месть не в своём разделе: %+v", it)
+	}
+	accs := map[string]*plan.Accumulator{}
+	for i := range sk.Accumulators {
+		accs[sk.Accumulators[i].Key] = &sk.Accumulators[i]
+	}
+	for key, want := range map[string][3]float64{
+		"acc:gorozhane":      {1.05, 2, 25},
+		"acc:okrestnosti_mu": {0.04, 1, 1},
+		"acc:velikiy_uspeh":  {1, 2, 0},
+		"acc:dzon_snou":      {1, 1, 0},
+		"acc:ravnovesie":     {1, 1, 0},
+		"acc:hardkor":        {-1, 1, 0},
+	} {
+		a := accs[key]
+		if a == nil {
+			t.Errorf("нет накопителя %q", key)
+			continue
+		}
+		if a.Charges != want[0] || a.Max != want[1] || a.Rate != want[2] {
+			t.Errorf("%s: %v/%v, +%v%%, ждал %v/%v, +%v%%", key, a.Charges, a.Max, a.Rate, want[0], want[1], want[2])
+		}
+	}
+	ladders := map[string]*plan.LadderCfg{}
+	for i := range sk.Ladders {
+		ladders[sk.Ladders[i].Key] = &sk.Ladders[i]
+	}
+	for key, from := range map[string]float64{
+		"talent.die": 25, "talent.dice_count": 5, "talent.flat": 6,
+		"roots.min": 50, "chance.billion": 2, "chance.million_home": 1,
+	} {
+		l := ladders[key]
+		if l == nil {
+			t.Errorf("нет шкалы %q", key)
+			continue
+		}
+		if l.From != from {
+			t.Errorf("%s: уже есть %v, ждал %v", key, l.From, from)
+		}
+	}
+
+	// План из каркаса: пять уроков, две фиксированные покупки, тренировка,
+	// месть и фолиант. Проверки не должны сработать, а строки — быть короткими.
+	c.post("/register", url.Values{
+		"nick": {"life9"}, "discord": {"@life9"}, "password": {"verysecret1"}, "password2": {"verysecret1"},
+	})
+	resp = c.post("/plans", url.Values{"title": {"Жизнь 9"}, "emoji": {"🌊"}, "preset": {"09-kontinent-iskonnogo-balansa"}})
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("создание плана: код %d", resp.StatusCode)
+	}
+	planURL := resp.Header.Get("Location")
+	_, body := c.getBody(planURL)
+	st := planFromPage(t, body)
+	st["decimals"] = true
+	st["picks"] = []map[string]any{
+		{"key": "lesson:skidka_na_skidku"},
+		{"key": "lesson:pogibel_prizrakov"},
+		{"key": "lesson:gluboko_nevyuchennye_uroki"},
+		{"key": "lesson:rodoslovnaya_raduzhnoy_foreli"},
+		{"key": "lesson:rodoslovnaya_pylayuschego_varana"},
+		{"key": "lesson:plody_otravlennoy_palmy"},
+		{"key": "lesson:vmeste_veselee_cao"},
+		{"key": "item:diletantka_kastetov"},
+		{"key": "revenge:monivong_dzhivan"},
+		{"key": "folio:vzyat_1_foliant"},
+		{"key": "folio:vykupit_tuman"},
+	}
+	for _, raw := range st["accumulators"].([]any) {
+		a := raw.(map[string]any)
+		if a["key"] == "acc:gorozhane" || a["key"] == "acc:dzon_snou" {
+			a["activate"] = true
+		}
+	}
+	for _, raw := range st["folios"].([]any) {
+		f := raw.(map[string]any)
+		if f["key"] == "folio:metod_neproglyadnogo_tumana" {
+			f["take"] = true
+		}
+	}
+	state, _ := json.Marshal(st)
+	if resp := c.post(planURL, url.Values{"state": {string(state)}}); resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("сохранение: код %d", resp.StatusCode)
+	}
+	resp = c.do("GET", planURL+"/export?format=txt", nil)
+	txt, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	for _, want := range []string{
+		"Уроки: 1. скидка на скидку: 5, 2. призраки: 10, 3. глубоко невыученные: 15, 4. форель: 20, 5. Варан: 25",
+		"Уроки с фиксированной ценой: Пальма: 1, Цао: 5",
+		"Месть: Дживан: 60",
+		"Тренировки и навыки: кастеты: 0",
+		"Фолианты: 1 фолиант: 5, выкуп Тумана: 50",
+		"Активация накопителей: горожане (1,05/2, +25% за жизнь), Джон (1/1)",
+		"Беру с собой: Туман",
+		"Невыученные: —",
+		"Остаток: 262,19948 XP",
+	} {
+		if !strings.Contains(string(txt), want) {
+			t.Errorf("в выгрузке нет %q:\n%s", want, txt)
+		}
+	}
+	if strings.Contains(string(txt), "Проверки:") {
+		t.Errorf("в плане не должно быть проверок:\n%s", txt)
 	}
 }
 

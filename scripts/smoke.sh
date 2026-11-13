@@ -40,6 +40,7 @@ check "регистрация" "$(curl -sS -o /dev/null -w '%{http_code}' --max-
 PLANS="$(curl -sS --max-time 20 -b "$JAR" -c "$JAR" "$BASE/plans")"
 if printf '%s' "$PLANS" | grep -q "Мои планы"; then ok "страница планов"; else bad "страница планов не отдалась"; fi
 if printf '%s' "$PLANS" | grep -q "08-zaskoruzlye-piramidy"; then ok "каркас виден в списке"; else bad "каркаса нет в списке"; fi
+if printf '%s' "$PLANS" | grep -q "09-kontinent-iskonnogo-balansa"; then ok "каркас жизни 9 виден в списке"; else bad "каркаса жизни 9 нет в списке"; fi
 
 LOC="$(curl -sS -o /dev/null -w '%{redirect_url}' --max-time 20 -b "$JAR" -c "$JAR" \
   -d "title=Смоук&emoji=🩸&preset=08-zaskoruzlye-piramidy" "$BASE/plans")"
@@ -235,6 +236,7 @@ else
 fi
 check "справка по механике" "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$BASE/guide")" "200"
 check "каркас отдаётся файлом" "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$BASE/presets/08-zaskoruzlye-piramidy")" "200"
+check "каркас жизни 9 отдаётся файлом" "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "$BASE/presets/09-kontinent-iskonnogo-balansa")" "200"
 check "профиль" "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 -b "$JAR" "$BASE/profile")" "200"
 check "смена пароля" "$(curl -sS -o /dev/null -w '%{http_code}' --max-time 25 -b "$JAR" -c "$JAR" \
   -d "current=verysecret1&password=verysecret2&password2=verysecret2" "$BASE/profile/password")" "303"

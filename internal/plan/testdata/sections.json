@@ -18,57 +18,63 @@
     "order": 3
   },
   {
+    "key": "revenge",
+    "title": "Месть",
+    "hint": "цели и условия",
+    "order": 4
+  },
+  {
     "key": "talent",
     "title": "Талант",
     "hint": "кости таланта и плоский бонус",
-    "order": 4
+    "order": 5
   },
   {
     "key": "roots",
     "title": "Чистота корней",
     "hint": "максимум и минимум",
-    "order": 5
+    "order": 6
   },
   {
     "key": "chances",
     "title": "Шансы",
     "hint": "«один на миллион» и «один на миллиард»",
-    "order": 6
+    "order": 7
   },
   {
     "key": "accumulators",
     "title": "Накопители",
     "hint": "заряжаются за прожитые жизни",
-    "order": 7
+    "order": 8
   },
   {
     "key": "physique",
     "title": "Телосложения",
     "hint": "активное и неактивные",
-    "order": 8
+    "order": 9
   },
   {
     "key": "bloodline",
     "title": "Родословные",
     "hint": "активная и неактивные",
-    "order": 9
+    "order": 10
   },
   {
     "key": "trainings",
     "title": "Тренировки и навыки",
     "hint": "постоянные бонусы",
-    "order": 10
+    "order": 11
   },
   {
     "key": "folio",
     "title": "Фолианты",
     "hint": "методы и техники в библиотеке",
-    "order": 11
+    "order": 12
   },
   {
     "key": "other",
     "title": "Прочее",
     "hint": "всё остальное",
-    "order": 12
+    "order": 13
   }
 ]

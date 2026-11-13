@@ -34,6 +34,7 @@ const (
 	SecBloodline    = "bloodline"
 	SecFolio        = "folio"
 	SecPatches      = "patches"
+	SecRevenge      = "revenge"
 	SecOther        = "other"
 )
 
