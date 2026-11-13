@@ -269,6 +269,17 @@ test('младшая тренировка удешевляет старшую н
   assert.strictEqual(KT.itemCost(p, p.shop[1]), 5);
 });
 
+test('урок с no_defer нельзя отложить повторно', () => {
+  const p = {
+    balance: 100, picks: [], deferred: [{ key: 'lesson:tuman', slot: 1 }],
+    shop: [
+      { key: 'lesson:tuman', kind: 'lesson', section: 'lessons', title: 'Туман', no_defer: true }
+    ]
+  };
+  const warnings = KT.computeSummary(p, sections).warnings.join('\n');
+  assert.ok(warnings.includes('нельзя отложить невыученными уроками'), warnings);
+});
+
 test('«не раньше N уроков» у не-урока проверяется', () => {
   const p = {
     balance: 1000, deferred: [], picks: [{ key: 'revenge:conc' }],

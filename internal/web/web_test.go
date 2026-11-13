@@ -321,6 +321,13 @@ func TestLife9Preset(t *testing.T) {
 		t.Error("в каркасе нет метода Непроглядного Тумана")
 	} else if it.Fixed {
 		t.Errorf("метод Непроглядного Тумана не должен быть фиксированным: %+v", it)
+	} else if !it.NoDefer {
+		t.Error("метод перенесён невыученным — повторно отложить его нельзя")
+	}
+	if it := byKey["lesson:rodoslovnaya_raduzhnoy_foreli"]; it == nil {
+		t.Error("в каркасе нет родословной Радужной Форели")
+	} else if !it.NoDefer {
+		t.Error("родословная перенесена невыученной — повторно отложить её нельзя")
 	}
 	// Младшая тренировка удешевляет старшую на свою цену.
 	for key, want := range map[string]plan.PriceCut{

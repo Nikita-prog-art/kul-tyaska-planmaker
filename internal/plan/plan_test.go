@@ -1376,6 +1376,27 @@ func TestFogMethodIsOrdinaryLesson(t *testing.T) {
 	}
 }
 
+// TestCarriedLessonsCannotBeDeferredAgain — метод Тумана и родословная Форели
+// сами приехали невыученными уроками, поэтому повторно откладывать их нельзя.
+func TestCarriedLessonsCannotBeDeferredAgain(t *testing.T) {
+	sk := life9Skeleton(t)
+	p := sk.NewPlan("u", "повторное отложение", "")
+	p.Deferred = []plan.Deferred{
+		{Key: "lesson:metod_neproglyadnogo_tumana", Slot: 1},
+		{Key: "lesson:rodoslovnaya_raduzhnoy_foreli", Slot: 2},
+	}
+	p.Normalize()
+	sum := plan.Compute(p)
+	for _, title := range []string{
+		"метод Непроглядного Тумана (освоено)",
+		"родословная Радужной Форели (обычная)",
+	} {
+		if !hasWarning(sum.Warnings, "«"+title+"» нельзя отложить невыученными уроками") {
+			t.Errorf("ждал запрет откладывать «%s», получил %v", title, sum.Warnings)
+		}
+	}
+}
+
 func lineByKey(sum *plan.Summary, section, key string) (plan.Line, bool) {
 	for _, sec := range sum.Sections {
 		if sec.Key != section {

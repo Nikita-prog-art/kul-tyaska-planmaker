@@ -914,6 +914,21 @@ test('скидка на скидку пересчитывает цену в ма
     d.getElementById('kt-export-text').value);
 });
 
+test('урок, перенесённый невыученным, нельзя отложить повторно', () => {
+  const p = miniPlan([
+    { key: 'lesson:tuman', kind: 'lesson', section: 'lessons', title: 'Туман', cost: 0, no_defer: true }
+  ]);
+  const w = bootPage(p);
+  const d = w.document;
+  const row = rowByTitleIn(d, 'Туман');
+  const btn = row.querySelector('[data-act="defer"]');
+  assert.ok(btn.disabled, 'кнопка «невыученный» выключена');
+  assert.ok(row.textContent.indexOf('нельзя отложить') >= 0, 'у урока видна пометка: ' + row.textContent);
+  btn.click();
+  assert.ok(d.getElementById('kt-export-text').value.indexOf('Невыученные: —') >= 0,
+    'после клика урок не ушёл в невыученные: ' + d.getElementById('kt-export-text').value);
+});
+
 test('«не раньше N уроков» показывается и гаснет, когда уроков хватает', () => {
   const p = miniPlan([
     { key: 'lesson:a', kind: 'lesson', section: 'lessons', title: 'урок а', cost: 0 },

@@ -765,6 +765,7 @@
     if ((it.tags || []).indexOf('trophy') >= 0) tags.push(h('span', { class: 'tag', text: 'трофей' }));
     if ((it.tags || []).indexOf('osvoeno') >= 0) tags.push(h('span', { class: 'tag', text: 'освоено' }));
     if ((it.tags || []).indexOf('defer_slot') >= 0) tags.push(h('span', { class: 'tag ok', text: '+1 слот невыученных' }));
+    if (it.no_defer) tags.push(h('span', { class: 'tag warn', text: 'нельзя отложить' }));
     if (it.fixed && it.kind === 'lesson') tags.push(h('span', { class: 'tag', text: 'фиксированная цена' }));
     if (it.requires && it.requires.length) tags.push(h('span', { class: 'tag', text: 'нужен урок' }));
     if (it.excludes && it.excludes.length) tags.push(h('span', { class: 'tag warn', text: 'несовместимо' }));
@@ -804,8 +805,9 @@
         }),
         it.kind === 'lesson' ? h('button', {
           class: 'state defer', type: 'button', dataset: { act: 'defer', key: it.key }, text: 'невыученный',
-          disabled: it.locked,
-          title: it.locked ? 'обязательную позицию нельзя отложить' : '',
+          disabled: it.locked || it.no_defer,
+          title: it.locked ? 'обязательную позицию нельзя отложить'
+            : (it.no_defer ? 'этот урок уже перенесён невыученным и повторно не откладывается' : ''),
           onclick: function () { setState(it.key, 'defer'); }
         }) : null,
         h('button', {
@@ -870,6 +872,9 @@
 
   function setState(key, state) {
     if (isLocked(plan, key)) return; // обязательные позиции не снимаются
+    var it = item(key);
+    // Урок, который сам приехал невыученным, повторно отложить нельзя.
+    if (state === 'defer' && it && it.no_defer) return;
     var picked = isPicked(key), deferred = isDeferred(key), skipped = isNotTaken(key);
     if (state === 'pick') {
       if (picked) setPick(key, false);
