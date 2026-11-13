@@ -31,6 +31,7 @@
       if (!it.kind) it.kind = 'item';
       if (!it.section) it.section = 'other';
       it.min_lesson = Number(it.min_lesson) || 1;
+      it.min_lessons = Number(it.min_lessons) || 0;
       it.cost = Number(it.cost) || 0;
       if (it.already_paid) it.locked = true;
     });
@@ -226,6 +227,7 @@
       it.kind = it.kind || 'item';
       it.section = it.section || 'other';
       it.min_lesson = it.min_lesson || 1;
+      it.min_lessons = Number(it.min_lessons) || 0;
       it.cost = Number(it.cost) || 0;
       if (it.fixed === undefined) it.fixed = it.kind !== 'lesson';
       return it;
@@ -726,6 +728,7 @@
 
   function renderItem(it, sectionKey) {
     var tags = [];
+    var discount = KT.itemDiscount(plan, it);
     if (it.locked) {
       tags.push(h('span', {
         class: 'tag lock',
@@ -740,6 +743,20 @@
         class: 'tag warn', dataset: { minTag: it.min_lesson },
         title: 'можно взять как минимум ' + it.min_lesson + '-м уроком',
         text: 'минимум ' + it.min_lesson + '-м уроком'
+      }));
+    }
+    if (it.min_lessons > 0) {
+      tags.push(h('span', {
+        class: 'tag warn', dataset: { minLessons: it.min_lessons },
+        title: 'можно взять, когда в плане не меньше ' + it.min_lessons + ' уроков',
+        text: 'минимум ' + it.min_lessons + ' уроков'
+      }));
+    }
+    if (discount > 0) {
+      tags.push(h('span', {
+        class: 'tag ok',
+        title: 'скидка на цену: −' + fmt(discount) + ' XP',
+        text: '−' + fmt(discount) + ' XP'
       }));
     }
     if ((it.tags || []).indexOf('one_chance') >= 0) tags.push(h('span', { class: 'tag warn', text: 'только один раз в жизни' }));
@@ -771,7 +788,11 @@
           h('p', { text: it.desc })
         ]) : null
       ]),
-      h('div', { class: 'item-cost', dataset: { cost: it.key }, text: fmt(it.cost) }),
+      h('div', {
+        class: 'item-cost', dataset: { cost: it.key },
+        title: discount > 0 ? 'без скидки ' + fmt(it.cost) + ' XP' : null,
+        text: fmt(KT.itemCost(plan, it))
+      }),
       h('div', { class: 'item-state' }, [
         h('button', {
           class: 'state pick', type: 'button', dataset: { act: 'pick', key: it.key }, text: 'беру',
@@ -1011,6 +1032,10 @@
       var line = lineByKey[key];
       var costEl = row.querySelector('[data-cost]');
       var badge = row.querySelector('[data-badge]');
+      var discount = KT.itemDiscount(plan, it);
+      if (costEl) {
+        costEl.title = discount > 0 ? 'без скидки ' + fmt(it.cost) + ' XP' : '';
+      }
       if (it.kind === 'lesson' && !it.fixed && !line) {
         // ещё не выбран: показываем цену, которая будет при следующем клике
         var previewIdx = paidCount + 1;
@@ -1018,7 +1043,7 @@
       } else if (costEl && line) {
         costEl.textContent = fmt(line.cost);
       } else if (costEl) {
-        costEl.textContent = fmt(it.cost);
+        costEl.textContent = fmt(KT.itemCost(plan, it));
       }
       if (badge) badge.textContent = line && line.number ? String(line.number) : '';
       var qtyEl = row.querySelector('[data-qty]');
@@ -1051,6 +1076,19 @@
         row.classList.add('locked');
       } else {
         row.classList.remove('locked');
+      }
+      // «Не раньше N уроков» у не-урока: тег зелёный, когда уроков хватает.
+      var minLessonsTag = row.querySelector('[data-min-lessons]');
+      if (minLessonsTag) {
+        var need = Number(minLessonsTag.dataset.minLessons) || 0;
+        var have = summary.paidLessons;
+        var met = have >= need;
+        minLessonsTag.classList.toggle('ok', met);
+        minLessonsTag.classList.toggle('warn', !met);
+        minLessonsTag.title = met
+          ? 'условие выполнено: уроков в плане ' + have
+          : 'нужно минимум ' + need + ' уроков, а в плане ' + have;
+        if (isPicked(key) && !met) row.classList.add('locked');
       }
     });
 

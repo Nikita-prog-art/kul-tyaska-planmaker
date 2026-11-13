@@ -147,8 +147,8 @@ func (p *Plan) prereqText(key string) string {
 		title = displayTitle(it)
 	}
 	title = quoteTitle(title)
-	if it.Cost > 0 {
-		return fmt.Sprintf("%s (%s XP)", title, formatNum(it.Cost))
+	if cost := p.ItemCost(it); cost > 0 {
+		return fmt.Sprintf("%s (%s XP)", title, formatNum(cost))
 	}
 	return title
 }

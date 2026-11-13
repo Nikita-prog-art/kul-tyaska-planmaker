@@ -108,6 +108,22 @@ func (s *Skeleton) Normalize() error {
 			it.LockNote = "обязательная позиция каркаса"
 		}
 	}
+	// Скидки ссылаются на покупки каркаса: битые ключи и скидки на себя
+	// выбрасываем, иначе цена молча не пересчитается.
+	for i := range s.Shop {
+		it := &s.Shop[i]
+		if it.MinLessons < 0 {
+			it.MinLessons = 0
+		}
+		var cuts []PriceCut
+		for _, d := range it.Discounts {
+			if d.Key == "" || d.Key == it.Key || d.Amount <= 0 || !seen[d.Key] {
+				continue
+			}
+			cuts = append(cuts, d)
+		}
+		it.Discounts = cuts
+	}
 	// Награды за порядок: ссылаться можно только на существующую позицию.
 	for i := range s.Shop {
 		it := &s.Shop[i]

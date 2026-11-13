@@ -219,6 +219,58 @@ test('выкуп без урока метода — это ошибка в пл�
   assert.ok(warnings.indexOf('взят без') >= 0, 'сказано, что он взят без урока: ' + warnings);
 });
 
+test('скидка на цену пересчитывается без ручной правки', () => {
+  const p = {
+    balance: 2000, deferred: [], picks: [{ key: 'lesson:skidka' }],
+    shop: [
+      { key: 'lesson:skidka', kind: 'lesson', section: 'lessons', title: 'скидка на скидку', cost: 0 },
+      { key: 'item:skidka', kind: 'item', section: 'other', title: 'скидка на деактивацию', cost: 1000, fixed: true,
+        discount: [{ key: 'lesson:skidka', amount: 100 }] },
+      { key: 'item:deshevaya', kind: 'item', section: 'other', title: 'дешёвая', cost: 30, fixed: true,
+        discount: [{ key: 'lesson:skidka', amount: 100 }] }
+    ]
+  };
+  assert.strictEqual(KT.itemDiscount(p, p.shop[1]), 100);
+  assert.strictEqual(KT.itemCost(p, p.shop[1]), 900);
+  assert.strictEqual(KT.itemCost(p, p.shop[2]), 0, 'скидка не делает цену отрицательной');
+
+  p.picks.push({ key: 'item:skidka' });
+  const sum = KT.computeSummary(p, sections);
+  assert.strictEqual(sum.total, 905, 'урок 5 XP и скидка 900 XP');
+  const line = sum.sections.filter((s) => s.key === 'other')[0].lines[0];
+  assert.strictEqual(line.cost, 900);
+
+  // Отложенный урок скидку не даёт: он ещё не оплачен.
+  p.picks = [{ key: 'item:skidka' }];
+  p.deferred = [{ key: 'lesson:skidka', slot: 1 }];
+  assert.strictEqual(KT.itemCost(p, p.shop[1]), 1000);
+});
+
+test('«не раньше N уроков» у не-урока проверяется', () => {
+  const p = {
+    balance: 1000, deferred: [], picks: [{ key: 'revenge:conc' }],
+    shop: [
+      { key: 'lesson:a', kind: 'lesson', section: 'lessons', title: 'а', cost: 0 },
+      { key: 'lesson:b', kind: 'lesson', section: 'lessons', title: 'б', cost: 0 },
+      { key: 'lesson:c', kind: 'lesson', section: 'lessons', title: 'в', cost: 0 },
+      { key: 'lesson:fixed', kind: 'lesson', section: 'fixed', title: 'фикс', cost: 1, fixed: true },
+      { key: 'revenge:conc', kind: 'revenge', section: 'revenge', title: 'сосредоточенная месть', cost: 0, fixed: true, min_lessons: 3 }
+    ]
+  };
+  p.picks.push({ key: 'lesson:a' }, { key: 'lesson:b' }, { key: 'lesson:fixed' });
+  let sum = KT.computeSummary(p, sections);
+  assert.ok(sum.warnings.some((w) => w.includes('уроков в плане 2, а нужно минимум 3')), sum.warnings.join('\n'));
+
+  p.picks.push({ key: 'lesson:c' });
+  sum = KT.computeSummary(p, sections);
+  assert.ok(!sum.warnings.some((w) => w.includes('нужно минимум 3')), 'с тремя уроками требование закрыто');
+
+  p.picks = p.picks.filter((x) => x.key !== 'lesson:c');
+  p.deferred = [{ key: 'lesson:c', slot: 1 }];
+  sum = KT.computeSummary(p, sections);
+  assert.ok(sum.warnings.some((w) => w.includes('уроков в плане 2')), 'отложенный урок номер не занимает');
+});
+
 if (failures) {
   console.error('\nПровалено проверок: ' + failures);
   process.exit(1);

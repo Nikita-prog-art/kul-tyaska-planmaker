@@ -42,19 +42,26 @@ const (
 // Магазин хранится внутри плана: он разобран из текста посмертия и его
 // можно править руками, поэтому план самодостаточен.
 type ShopItem struct {
-	Key       string   `json:"key"`
-	Section   string   `json:"section"`
-	Kind      string   `json:"kind"`
-	Title     string   `json:"title"`           // кратко, как в плане
-	Short     string   `json:"short,omitempty"` // для выгрузки: ещё короче, «Мелисандра»
-	Full      string   `json:"full,omitempty"`  // полное название из текста
-	Cost      float64  `json:"cost"`            // база; для растущих уроков 0
-	Fixed     bool     `json:"fixed"`           // фиксированная цена урока
-	MinLesson int      `json:"min_lesson"`      // «можно взять как минимум n-ным уроком»
-	Once      bool     `json:"once"`
-	Requires  []string `json:"requires,omitempty"`
-	Excludes  []string `json:"excludes,omitempty"`
-	NoDefer   bool     `json:"no_defer,omitempty"` // «нельзя применить невыученные уроки»
+	Key       string  `json:"key"`
+	Section   string  `json:"section"`
+	Kind      string  `json:"kind"`
+	Title     string  `json:"title"`           // кратко, как в плане
+	Short     string  `json:"short,omitempty"` // для выгрузки: ещё короче, «Мелисандра»
+	Full      string  `json:"full,omitempty"`  // полное название из текста
+	Cost      float64 `json:"cost"`            // база; для растущих уроков 0
+	Fixed     bool    `json:"fixed"`           // фиксированная цена урока
+	MinLesson int     `json:"min_lesson"`      // «можно взять как минимум n-ным уроком»
+	// MinLessons — «не раньше N уроков» для не-урока: позицию можно взять,
+	// только когда в плане уже есть N нумеруемых уроков. Так «сосредоточенная
+	// месть» требует десяти уроков, хотя сама уроком не является.
+	MinLessons int `json:"min_lessons,omitempty"`
+	// Discounts — скидки на цену позиции: каждая взятая покупка из Key
+	// снимает Amount XP. Скидка не опускает цену ниже нуля.
+	Discounts []PriceCut `json:"discount,omitempty"`
+	Once      bool       `json:"once"`
+	Requires  []string   `json:"requires,omitempty"`
+	Excludes  []string   `json:"excludes,omitempty"`
+	NoDefer   bool       `json:"no_defer,omitempty"` // «нельзя применить невыученные уроки»
 	// Repeat — сколько раз позицию можно взять в одном плане (0 или 1 — один раз):
 	// «взять 1 фолиант (максимум 3)», «лестница в небо — можно купить дважды».
 	Repeat int      `json:"repeat,omitempty"`
@@ -78,6 +85,12 @@ type ShopItem struct {
 	// добавляет заряд, «максимум зарядов» поднимает максимум, «скорость
 	// зарядки» задаёт новый процент за жизнь.
 	Effects []ShopEffect `json:"effects,omitempty"`
+}
+
+// PriceCut — скидка на позицию: взятая покупка Key удешевляет её на Amount XP.
+type PriceCut struct {
+	Key    string  `json:"key"`    // ключ покупки-источника скидки
+	Amount float64 `json:"amount"` // сколько XP она снимает
 }
 
 // ShopEffect — влияние покупки на накопитель.
@@ -279,6 +292,26 @@ func (p *Plan) Normalize() {
 		if it.AlreadyPaid {
 			it.Locked = true
 		}
+	}
+	// Скидки ссылаются на покупки магазина: битые ключи и скидки на себя
+	// выбрасываем, как и в каркасе.
+	seen := make(map[string]bool, len(p.Shop))
+	for i := range p.Shop {
+		seen[p.Shop[i].Key] = true
+	}
+	for i := range p.Shop {
+		it := &p.Shop[i]
+		if it.MinLessons < 0 {
+			it.MinLessons = 0
+		}
+		var cuts []PriceCut
+		for _, d := range it.Discounts {
+			if d.Key == "" || d.Key == it.Key || d.Amount <= 0 || !seen[d.Key] {
+				continue
+			}
+			cuts = append(cuts, d)
+		}
+		it.Discounts = cuts
 	}
 	// Награда за порядок бессмысленна, если опорной позиции нет в магазине.
 	for i := range p.Shop {

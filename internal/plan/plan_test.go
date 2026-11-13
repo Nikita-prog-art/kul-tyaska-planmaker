@@ -1288,3 +1288,119 @@ func TestDeferredSlots(t *testing.T) {
 		t.Errorf("взятый урок с тегом defer_slot даёт второй слот, получил %d", got)
 	}
 }
+
+// TestItemDiscount — скидка на цену: «скидка на скидку» снимает 100 XP
+// с постоянной скидки на деактивацию, и счётчик пересчитывает её сам.
+func TestItemDiscount(t *testing.T) {
+	p := &plan.Plan{
+		Balance: 2000,
+		Shop: []plan.ShopItem{
+			{Key: "lesson:skidka", Kind: plan.KindLesson, Section: plan.SecLessons, Title: "скидка на скидку"},
+			{Key: "item:skidka", Kind: plan.KindItem, Section: plan.SecOther, Title: "скидка на деактивацию", Cost: 1000,
+				Discounts: []plan.PriceCut{{Key: "lesson:skidka", Amount: 100}}},
+			{Key: "item:deshevaya", Kind: plan.KindItem, Section: plan.SecOther, Title: "дешёвая", Cost: 30,
+				Discounts: []plan.PriceCut{{Key: "lesson:skidka", Amount: 100}}},
+		},
+		Options: plan.Options{Decimals: true},
+	}
+	p.Normalize()
+	if got := p.ItemCost(p.Item("item:skidka")); got != 1000 {
+		t.Fatalf("без урока скидка стоит 1000, получил %v", got)
+	}
+
+	p.Picks = []plan.Pick{{Key: "lesson:skidka"}, {Key: "item:skidka"}}
+	sum := plan.Compute(p)
+	if got := p.ItemCost(p.Item("item:skidka")); got != 900 {
+		t.Errorf("с уроком скидка стоит 900, получил %v", got)
+	}
+	if got := p.ItemCost(p.Item("item:deshevaya")); got != 0 {
+		t.Errorf("скидка не делает цену отрицательной: ждал 0, получил %v", got)
+	}
+	if got := sum.Total; got != 905 {
+		t.Errorf("урок 5 XP и скидка 900 XP дают 905, посчиталось %v", got)
+	}
+	for _, sec := range sum.Sections {
+		for _, l := range sec.Lines {
+			if l.Key == "item:skidka" && l.Cost != 900 {
+				t.Errorf("в строке плана скидка стоит %v, а не 900", l.Cost)
+			}
+		}
+	}
+
+	// Отложенный урок скидку не даёт: он ещё не оплачен и уедет дальше.
+	p.Picks = []plan.Pick{{Key: "item:skidka"}}
+	p.Deferred = []plan.Deferred{{Key: "lesson:skidka", Slot: 1}}
+	if got := p.ItemCost(p.Item("item:skidka")); got != 1000 {
+		t.Errorf("отложенный урок не удешевляет скидку: получил %v", got)
+	}
+}
+
+// TestSkeletonDiscountAndMinLessons — каркас понимает обе новые ручки:
+// скидку на цену и «не раньше N уроков» у не-урока.
+func TestSkeletonDiscountAndMinLessons(t *testing.T) {
+	raw := []byte(`{"name":"тест","balance":100,"shop":[
+		{"key":"lesson:skidka","kind":"lesson","section":"lessons","title":"скидка на скидку"},
+		{"key":"item:skidka","kind":"item","section":"other","title":"скидка на деактивацию","cost":1000,"fixed":true,
+		 "discount":[{"key":"lesson:skidka","amount":100},{"key":"lesson:net","amount":50},
+		             {"key":"item:skidka","amount":100},{"key":"lesson:skidka","amount":0}]},
+		{"key":"revenge:sosredotochennaya","kind":"revenge","section":"revenge","title":"сосредоточенная месть",
+		 "cost":0,"fixed":true,"min_lessons":10}
+	]}`)
+	sk, err := plan.ParseSkeleton(raw)
+	if err != nil {
+		t.Fatalf("каркас: %v", err)
+	}
+	if got := len(sk.Shop[1].Discounts); got != 1 {
+		t.Fatalf("в каркасе должна остаться одна скидка, получилось %d", got)
+	}
+	if got := sk.Shop[1].Discounts[0].Key; got != "lesson:skidka" {
+		t.Errorf("битые ключи и скидки на себя надо выбрасывать, осталась %q", got)
+	}
+	if got := sk.Shop[2].MinLessons; got != 10 {
+		t.Errorf("min_lessons не доехал до магазина: %d", got)
+	}
+}
+
+// TestMinLessons — «не раньше десяти уроков» проверяется у не-урока:
+// фиксированные и отложенные уроки номера не занимают и не считаются.
+func TestMinLessons(t *testing.T) {
+	p := &plan.Plan{
+		Balance: 1000,
+		Shop: []plan.ShopItem{
+			{Key: "lesson:a", Kind: plan.KindLesson, Section: plan.SecLessons, Title: "а"},
+			{Key: "lesson:b", Kind: plan.KindLesson, Section: plan.SecLessons, Title: "б"},
+			{Key: "lesson:c", Kind: plan.KindLesson, Section: plan.SecLessons, Title: "в"},
+			{Key: "lesson:fixed", Kind: plan.KindLesson, Section: plan.SecFixed, Title: "фикс", Fixed: true, Cost: 1},
+			{Key: "revenge:sosredotochennaya", Kind: plan.KindRevenge, Section: plan.SecRevenge,
+				Title: "сосредоточенная месть", Cost: 0, Fixed: true, MinLessons: 3},
+		},
+		Options: plan.Options{Decimals: true},
+	}
+	p.Normalize()
+	p.Picks = []plan.Pick{
+		{Key: "revenge:sosredotochennaya"},
+		{Key: "lesson:a"}, {Key: "lesson:b"}, {Key: "lesson:fixed"},
+	}
+	sum := plan.Compute(p)
+	warn := strings.Join(sum.Warnings, "\n")
+	if !strings.Contains(warn, "уроков в плане 2, а нужно минимум 3") {
+		t.Errorf("ждал предупреждение про два урока из трёх, получил:\n%s", warn)
+	}
+
+	p.Picks = append(p.Picks, plan.Pick{Key: "lesson:c"})
+	sum = plan.Compute(p)
+	if warn := strings.Join(sum.Warnings, "\n"); strings.Contains(warn, "нужно минимум 3") {
+		t.Errorf("с тремя уроками предупреждения быть не должно:\n%s", warn)
+	}
+
+	// Отложенный урок не считается: он не занимает номер.
+	p.Picks = []plan.Pick{
+		{Key: "revenge:sosredotochennaya"},
+		{Key: "lesson:a"}, {Key: "lesson:b"}, {Key: "lesson:fixed"},
+	}
+	p.Deferred = []plan.Deferred{{Key: "lesson:c", Slot: 1}}
+	sum = plan.Compute(p)
+	if warn := strings.Join(sum.Warnings, "\n"); !strings.Contains(warn, "уроков в плане 2") {
+		t.Errorf("отложенный урок не должен закрывать требование:\n%s", warn)
+	}
+}

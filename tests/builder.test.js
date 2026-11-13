@@ -879,3 +879,61 @@ test('«Разложить уроки» не спотыкается о фикс�
   const again = d.querySelector('#sec-lessons .sec-tools .sort-hint');
   assert.ok(/менять нечего/.test(again.textContent), 'повторная раскладка говорит, что менять нечего: ' + again.textContent);
 });
+
+// miniPlan собирает маленький план для точечных проверок интерфейса:
+// без каркаса и лишних секций, только нужные строки магазина.
+function miniPlan(shop) {
+  return {
+    id: 'mini', title: 'Мини-план', emoji: '', balance: 2000,
+    shop: shop, picks: [], deferred: [], not_taken: [],
+    ladders: [], accumulators: [], folios: [], requirements: [],
+    options: { decimals: true, numbered: true }
+  };
+}
+
+test('скидка на скидку пересчитывает цену в магазине и в сводке', () => {
+  const p = miniPlan([
+    { key: 'lesson:skidka', kind: 'lesson', section: 'lessons', title: 'скидка на скидку', cost: 0 },
+    { key: 'item:skidka', kind: 'item', section: 'other', title: 'скидка на деактивацию', cost: 1000, fixed: true,
+      discount: [{ key: 'lesson:skidka', amount: 100 }] }
+  ]);
+  const w = bootPage(p);
+  const d = w.document;
+
+  assert.strictEqual(rowByTitleIn(d, 'скидка на деактивацию').querySelector('[data-cost]').textContent, '1000');
+  pickIn(d, 'скидка на скидку');
+
+  const row = rowByTitleIn(d, 'скидка на деактивацию');
+  assert.strictEqual(row.querySelector('[data-cost]').textContent, '900', 'цена скидки пересчитана');
+  assert.ok(row.textContent.indexOf('−100 XP') >= 0, 'у позиции видна скидка: ' + row.textContent);
+  assert.strictEqual(d.getElementById('sum-spent').textContent, '5', 'пока куплен только урок');
+
+  pickIn(d, 'скидка на деактивацию');
+  assert.strictEqual(d.getElementById('sum-spent').textContent, '905', 'урок 5 XP и скидка 900 XP');
+  assert.ok(d.getElementById('kt-export-text').value.indexOf('скидка на деактивацию: 900') >= 0,
+    d.getElementById('kt-export-text').value);
+});
+
+test('«не раньше N уроков» показывается и гаснет, когда уроков хватает', () => {
+  const p = miniPlan([
+    { key: 'lesson:a', kind: 'lesson', section: 'lessons', title: 'урок а', cost: 0 },
+    { key: 'lesson:b', kind: 'lesson', section: 'lessons', title: 'урок б', cost: 0 },
+    { key: 'lesson:c', kind: 'lesson', section: 'lessons', title: 'урок в', cost: 0 },
+    { key: 'revenge:conc', kind: 'revenge', section: 'revenge', title: 'сосредоточенная месть',
+      cost: 0, fixed: true, min_lessons: 3 }
+  ]);
+  const w = bootPage(p);
+  const d = w.document;
+
+  pickIn(d, 'сосредоточенная месть');
+  assert.ok(d.getElementById('kt-warnings').textContent.indexOf('уроков в плане 0, а нужно минимум 3') >= 0,
+    d.getElementById('kt-warnings').textContent);
+  let tag = rowByTitleIn(d, 'сосредоточенная месть').querySelector('[data-min-lessons]');
+  assert.ok(tag && tag.classList.contains('warn'), 'тег красный, пока уроков мало');
+
+  ['урок а', 'урок б', 'урок в'].forEach((title) => pickIn(d, title));
+  assert.ok(d.getElementById('kt-warnings').textContent.indexOf('нужно минимум 3') < 0,
+    'с тремя уроками проверка гаснет: ' + d.getElementById('kt-warnings').textContent);
+  tag = rowByTitleIn(d, 'сосредоточенная месть').querySelector('[data-min-lessons]');
+  assert.ok(tag.classList.contains('ok'), 'тег стал зелёным');
+});

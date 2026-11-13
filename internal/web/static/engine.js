@@ -50,6 +50,28 @@
     return !!(item && item.tags && item.tags.indexOf(tag) >= 0);
   }
 
+  /* itemDiscount — суммарная скидка на позицию: каждая взятая покупка из
+     discount снимает amount XP. Отложенный урок скидку не даёт: он уедет
+     в следующую жизнь и здесь ещё не оплачен. */
+  function itemDiscount(plan, it) {
+    if (!it) return 0;
+    var sum = 0;
+    (it.discount || []).forEach(function (d) {
+      if (!d || !d.key || d.key === it.key) return;
+      var amount = Number(d.amount) || 0;
+      if (amount <= 0) return;
+      if (picked(plan, d.key) && !isDeferredKey(plan, d.key)) sum += amount;
+    });
+    return sum;
+  }
+
+  /* itemCost — цена позиции с учётом скидок; дешевле нуля не бывает. */
+  function itemCost(plan, it) {
+    if (!it) return 0;
+    var cost = (Number(it.cost) || 0) - itemDiscount(plan, it);
+    return cost < 0 ? 0 : cost;
+  }
+
   // Слоты «невыученных»: сколько открыто в каркасе (deferred_slots) плюс
   // по одному за каждый взятый урок с тегом defer_slot.
   function deferredLimit(plan, items) {
@@ -80,7 +102,7 @@
       var section = 'lessons';
       if (it.fixed) {
         // Фиксированная цена — отдельный раздел: номер такие уроки не занимают.
-        line.cost = Number(it.cost) || 0;
+        line.cost = itemCost(plan, it);
         section = 'fixed';
       } else {
         paid++;
@@ -104,6 +126,17 @@
       var picked = (plan.picks || []).some(function (p) { return p.key === it.key; });
       if (!picked) {
         warnings.push('обязательная позиция «' + it.title + '» не взята' + (it.lock_note ? ': ' + it.lock_note : ''));
+      }
+    });
+    // Не-урок может требовать, чтобы в плане уже было не меньше N уроков
+    // («сосредоточенная месть» — не раньше десяти). Считаются только
+    // нумеруемые уроки: фиксированные номера не занимают, отложенные — тем более.
+    (plan.shop || []).forEach(function (it) {
+      var need = Number(it.min_lessons) || 0;
+      if (it.kind === 'lesson' || need <= 0) return;
+      if (!picked(plan, it.key) || isDeferredKey(plan, it.key)) return;
+      if (paid < need) {
+        warnings.push('«' + it.title + '»: уроков в плане ' + paid + ', а нужно минимум ' + need);
       }
     });
     // Покупка с условием: «выкупить метод» без самого урока метода — деньги
@@ -143,7 +176,7 @@
       var it = items[pk.key];
       if (!it || it.kind === 'lesson') return;
       var qty = pk.qty > 0 ? pk.qty : 1;
-      var cost = (Number(it.cost) || 0) * qty;
+      var cost = itemCost(plan, it) * qty;
       total += cost;
       var sec = it.section || 'other';
       (bySection[sec] = bySection[sec] || []).push({
@@ -301,7 +334,8 @@
     if (!it) return key;
     var title = String(it.title || key).replace(/^выкупить\s*/, '') || String(it.title || key);
     if (!/[«»]/.test(title)) title = '«' + title + '»';
-    if (Number(it.cost) > 0) return title + ' (' + number(it.cost) + ' XP)';
+    var cost = itemCost(plan, it);
+    if (cost > 0) return title + ' (' + number(cost) + ' XP)';
     return title;
   }
 
@@ -533,6 +567,8 @@
     nextLadderStep: nextLadderStep,
     visibleLadders: visibleLadders,
     itemMap: itemMap,
+    itemDiscount: itemDiscount,
+    itemCost: itemCost,
     missingPrereqs: missingPrereqs,
     accumulatorValues: accumulatorValues,
     accumulatorKnown: accumulatorKnown,

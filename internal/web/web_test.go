@@ -311,6 +311,13 @@ func TestLife9Preset(t *testing.T) {
 	if it := byKey["revenge:monivong_dzhivan"]; it == nil || it.Section != plan.SecRevenge {
 		t.Errorf("месть не в своём разделе: %+v", it)
 	}
+	if it := byKey["item:skidka_na_tele"]; it == nil || len(it.Discounts) != 1 ||
+		it.Discounts[0].Key != "lesson:skidka_na_skidku" || it.Discounts[0].Amount != 100 {
+		t.Errorf("у постоянной скидки нет скидки за урок «скидка на скидку»: %+v", it)
+	}
+	if it := byKey["revenge:sosredotochennaya_mest"]; it == nil || it.MinLessons != 10 {
+		t.Errorf("сосредоточенная месть не требует десяти уроков: %+v", it)
+	}
 	accs := map[string]*plan.Accumulator{}
 	for i := range sk.Accumulators {
 		accs[sk.Accumulators[i].Key] = &sk.Accumulators[i]

@@ -83,7 +83,7 @@ func Compute(p *Plan) *Summary {
 		if item.Fixed {
 			// Фиксированная цена — отдельный раздел: номер такие уроки
 			// не занимают и в счётчик уроков не идут.
-			l.Cost = item.Cost
+			l.Cost = p.ItemCost(item)
 			section = SecFixed
 		} else {
 			paidIdx++
@@ -108,6 +108,19 @@ func Compute(p *Plan) *Summary {
 		if it.Locked && !p.Picked(it.Key) {
 			warnings = append(warnings,
 				fmt.Sprintf("обязательная позиция «%s» не взята%s", it.Title, lockSuffix(&it)))
+		}
+	}
+	// Не-урок может требовать, чтобы в плане уже было не меньше N уроков
+	// («сосредоточенная месть» — не раньше десяти). Считаются только
+	// нумеруемые уроки: фиксированные номера не занимают, отложенные — тем более.
+	for i := range p.Shop {
+		it := &p.Shop[i]
+		if it.Kind == KindLesson || it.MinLessons <= 0 || !p.Picked(it.Key) || p.IsDeferred(it.Key) {
+			continue
+		}
+		if paidIdx < it.MinLessons {
+			warnings = append(warnings, fmt.Sprintf("«%s»: уроков в плане %d, а нужно минимум %d",
+				displayTitle(it), paidIdx, it.MinLessons))
 		}
 	}
 	// Покупка с условием: «выкупить метод» без самого урока метода — деньги
@@ -179,7 +192,7 @@ func Compute(p *Plan) *Summary {
 		if qty <= 0 {
 			qty = 1
 		}
-		cost := item.Cost * float64(qty)
+		cost := p.ItemCost(item) * float64(qty)
 		total += cost
 		sec := sectionOf(item)
 		note := item.priceOrNote()
