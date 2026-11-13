@@ -54,7 +54,7 @@
      discount снимает amount XP. Отложенный урок скидку не даёт: он уедет
      в следующую жизнь и здесь ещё не оплачен. */
   function itemDiscount(plan, it) {
-    if (!it) return 0;
+    if (!it || !Array.isArray(it.discount)) return 0;
     var sum = 0;
     (it.discount || []).forEach(function (d) {
       if (!d || !d.key || d.key === it.key) return;

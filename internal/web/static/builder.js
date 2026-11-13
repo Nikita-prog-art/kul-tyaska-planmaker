@@ -32,6 +32,7 @@
       if (!it.section) it.section = 'other';
       it.min_lesson = Number(it.min_lesson) || 1;
       it.min_lessons = Number(it.min_lessons) || 0;
+      if (!Array.isArray(it.discount)) it.discount = [];
       it.cost = Number(it.cost) || 0;
       if (it.already_paid) it.locked = true;
     });
@@ -228,6 +229,7 @@
       it.section = it.section || 'other';
       it.min_lesson = it.min_lesson || 1;
       it.min_lessons = Number(it.min_lessons) || 0;
+      if (!Array.isArray(it.discount)) it.discount = [];
       it.cost = Number(it.cost) || 0;
       if (it.fixed === undefined) it.fixed = it.kind !== 'lesson';
       return it;
