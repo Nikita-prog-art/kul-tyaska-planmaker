@@ -80,6 +80,29 @@ func (c *client) post(path string, form url.Values) *http.Response {
 	return resp
 }
 
+// postJSON — сохранение из конструктора: тот же form-urlencoded, но с
+// заголовком X-KT-Save, по которому сервер отвечает JSON-ом вместо редиректа.
+func (c *client) postJSON(path string, form url.Values) (*http.Response, string) {
+	c.t.Helper()
+	body := ""
+	if form != nil {
+		body = form.Encode()
+	}
+	req, err := http.NewRequest("POST", c.srv.URL+path, strings.NewReader(body))
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("X-KT-Save", "fetch")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		c.t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	return resp, string(raw)
+}
+
 func TestPagesRequireAuth(t *testing.T) {
 	c := newClient(t)
 	resp := c.post("/plans", nil)
@@ -717,5 +740,90 @@ func TestThemeSwitchInMarkup(t *testing.T) {
 	}
 	if !strings.Contains(string(raw), "kt-theme") {
 		t.Error("в theme.js нет переключателя темы")
+	}
+}
+
+// TestPlanSaveJSON — конструктор сохраняет через fetch и ждёт JSON, а не
+// редирект: иначе страница уезжала бы на новую загрузку и теряла вкладку.
+func TestPlanSaveJSON(t *testing.T) {
+	c := newClient(t)
+	c.post("/register", url.Values{
+		"nick": {"fetchsave"}, "discord": {"@fetchsave"}, "password": {"verysecret1"}, "password2": {"verysecret1"},
+	})
+	resp := c.post("/plans", url.Values{"title": {"Через fetch"}, "preset": {"09-kontinent-iskonnogo-balansa"}})
+	planURL := resp.Header.Get("Location")
+	if !strings.HasPrefix(planURL, "/plans/") {
+		t.Fatalf("план не создался: %q", planURL)
+	}
+	_, body := c.getBody(planURL)
+	st := planFromPage(t, body)
+	st["balance"] = 777
+	raw, _ := json.Marshal(st)
+
+	respJSON, out := c.postJSON(planURL, url.Values{"state": {string(raw)}})
+	if respJSON.StatusCode != http.StatusOK {
+		t.Fatalf("сохранение через fetch: код %d, тело %s", respJSON.StatusCode, out)
+	}
+	if ct := respJSON.Header.Get("Content-Type"); !strings.Contains(ct, "application/json") {
+		t.Errorf("ответ не JSON: %q", ct)
+	}
+	var got struct {
+		OK        bool      `json:"ok"`
+		UpdatedAt time.Time `json:"updated_at"`
+		URL       string    `json:"url"`
+	}
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("ответ не разобрался: %v (%s)", err, out)
+	}
+	if !got.OK {
+		t.Errorf("ok = false: %s", out)
+	}
+	if got.URL != planURL {
+		t.Errorf("url = %q, ждал %q", got.URL, planURL)
+	}
+	if got.UpdatedAt.IsZero() {
+		t.Error("updated_at пустой — клиенту нечем проверять свежесть")
+	}
+
+	// План действительно сохранился, а не только ответил ok.
+	_, body = c.getBody(planURL)
+	if b := planFromPage(t, body)["balance"]; b != float64(777) {
+		t.Errorf("баланс после сохранения = %v, ждал 777", b)
+	}
+
+	// Без заголовка — прежний редирект: старый путь не сломан.
+	if plain := c.post(planURL, url.Values{"state": {string(raw)}}); plain.StatusCode != http.StatusSeeOther {
+		t.Errorf("обычная форма: код %d, ждал 303", plain.StatusCode)
+	}
+}
+
+func TestPlanSaveJSONErrors(t *testing.T) {
+	c := newClient(t)
+
+	// Без сессии конструктор получает 401 JSON, а не страницу логина.
+	resp, body := c.postJSON("/plans/whatever", url.Values{"state": {"{}"}})
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("без сессии: код %d, тело %s", resp.StatusCode, body)
+	}
+	if !strings.Contains(body, "сессия") {
+		t.Errorf("в ответе нет объяснения: %s", body)
+	}
+
+	c.post("/register", url.Values{
+		"nick": {"fetcherr"}, "discord": {"@fetcherr"}, "password": {"verysecret1"}, "password2": {"verysecret1"},
+	})
+	created := c.post("/plans", url.Values{"title": {"Ошибки"}, "preset": {"09-kontinent-iskonnogo-balansa"}})
+	planURL := created.Header.Get("Location")
+
+	// Пустое состояние — 400 с текстом, а не 500 и не редирект.
+	resp, body = c.postJSON(planURL, url.Values{"state": {""}})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("пустое состояние: код %d, тело %s", resp.StatusCode, body)
+	}
+	var e struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(body), &e); err != nil || e.Error == "" {
+		t.Errorf("ошибка не в JSON: %v (%s)", err, body)
 	}
 }

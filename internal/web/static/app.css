@@ -465,6 +465,10 @@ input[type="checkbox"], input[type="radio"] {
 }
 .toolbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .dirty { color: var(--gold); font-size: 12px; }
+.save-status { font-size: 12px; color: var(--muted); }
+.save-status.saving { color: var(--gold); }
+.save-status.ok { color: var(--jade); }
+.save-status.err { color: var(--blood-bright); }
 
 .builder-grid {
   display: grid;

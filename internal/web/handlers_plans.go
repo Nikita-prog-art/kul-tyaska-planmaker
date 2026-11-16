@@ -15,7 +15,7 @@ func (s *Server) planFor(w http.ResponseWriter, r *http.Request) *plan.Plan {
 	u := userFrom(r.Context())
 	p, err := s.st.Plan(r.PathValue("id"))
 	if err != nil || p.UserID != u.ID {
-		http.Error(w, "план не найден", http.StatusNotFound)
+		s.saveError(w, r, http.StatusNotFound, "план не найден")
 		return nil
 	}
 	return p
@@ -127,6 +127,24 @@ type saveState struct {
 	DeferredSlots int `json:"deferred_slots"`
 }
 
+// wantsJSON — сохранение пришло из конструктора через fetch, а не из формы.
+// Таким запросам отвечаем JSON-ом, чтобы страница не уезжала на редирект.
+func wantsJSON(r *http.Request) bool {
+	return r.Header.Get("X-KT-Save") == "fetch"
+}
+
+// saveError отвечает ошибкой в том формате, который ждёт клиент.
+func (s *Server) saveError(w http.ResponseWriter, r *http.Request, status int, msg string) {
+	if !wantsJSON(r) {
+		http.Error(w, msg, status)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
+}
+
 func (s *Server) handlePlanSave(w http.ResponseWriter, r *http.Request) {
 	p := s.planFor(w, r)
 	if p == nil {
@@ -134,12 +152,12 @@ func (s *Server) handlePlanSave(w http.ResponseWriter, r *http.Request) {
 	}
 	raw := r.FormValue("state")
 	if raw == "" {
-		http.Error(w, "нет данных плана", http.StatusBadRequest)
+		s.saveError(w, r, http.StatusBadRequest, "нет данных плана")
 		return
 	}
 	var st saveState
 	if err := json.Unmarshal([]byte(raw), &st); err != nil {
-		http.Error(w, "не разобрал состояние плана: "+err.Error(), http.StatusBadRequest)
+		s.saveError(w, r, http.StatusBadRequest, "не разобрал состояние плана: "+err.Error())
 		return
 	}
 	if t := strings.TrimSpace(st.Title); t != "" {
@@ -180,7 +198,17 @@ func (s *Server) handlePlanSave(w http.ResponseWriter, r *http.Request) {
 	// Обязательные позиции каркаса доставляются в план (см. plan.Normalize).
 	p.Normalize()
 	if err := s.st.PutPlan(p); err != nil {
-		http.Error(w, "не удалось сохранить план", http.StatusInternalServerError)
+		s.saveError(w, r, http.StatusInternalServerError, "не удалось сохранить план")
+		return
+	}
+	if wantsJSON(r) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok":         true,
+			"updated_at": p.UpdatedAt,
+			"url":        "/plans/" + p.ID,
+		})
 		return
 	}
 	if r.FormValue("export") == "1" {

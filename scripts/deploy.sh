@@ -53,6 +53,10 @@ rssh 'sudo mkdir -p /opt/kul-tyaska /etc/kul-tyaska /var/lib/kultyaska &&
       sudo chown -R kultyaska:kultyaska /var/lib/kultyaska &&
       sudo chmod 750 /var/lib/kultyaska /etc/kul-tyaska'
 
+# Отпечаток туннеля до выкладки: если юнит и токен не менялись, туннель
+# перезапускать не нужно — это лишние секунды недоступности для живых людей.
+TUNNEL_BEFORE=$(rssh 'sha256sum /etc/kul-tyaska/tunnel.token /etc/systemd/system/kul-tyaska-tunnel.service 2>/dev/null | sha256sum | cut -d" " -f1' || true)
+
 echo "== токен туннеля =="
 # Копируем через файл, а не через stdin: rssh умеет повторять запрос,
 # а повтор с уже вычитанным stdin записал бы пустой токен.
@@ -89,13 +93,20 @@ rssh 'sudo install -m 0755 /tmp/kultyaska.new /opt/kul-tyaska/kultyaska &&
       sudo systemctl daemon-reload'
 
 echo "== запуск сервисов =="
-rssh 'sudo pkill -x cloudflared 2>/dev/null || true;
-      sudo systemctl enable --now kul-tyaska.service >/dev/null 2>&1;
+rssh 'sudo systemctl enable --now kul-tyaska.service >/dev/null 2>&1;
       sudo systemctl restart kul-tyaska.service;
-      sleep 2;
-      sudo systemctl enable --now kul-tyaska-tunnel.service >/dev/null 2>&1;
-      sudo systemctl restart kul-tyaska-tunnel.service;
-      sleep 4;
+      sleep 2'
+TUNNEL_AFTER=$(rssh 'sha256sum /etc/kul-tyaska/tunnel.token /etc/systemd/system/kul-tyaska-tunnel.service 2>/dev/null | sha256sum | cut -d" " -f1' || true)
+if [ -n "$TUNNEL_BEFORE" ] && [ "$TUNNEL_BEFORE" = "$TUNNEL_AFTER" ]; then
+  echo "== туннель не менялся — только включаю, без перезапуска =="
+  rssh 'sudo systemctl enable --now kul-tyaska-tunnel.service >/dev/null 2>&1 || true'
+else
+  echo "== туннель изменился — перезапускаю =="
+  rssh 'sudo pkill -x cloudflared 2>/dev/null || true;
+        sudo systemctl enable --now kul-tyaska-tunnel.service >/dev/null 2>&1;
+        sudo systemctl restart kul-tyaska-tunnel.service'
+fi
+rssh 'sleep 4;
       echo "--- культяшка ---"; sudo systemctl is-active kul-tyaska.service;
       echo "--- туннель ---"; sudo systemctl is-active kul-tyaska-tunnel.service;
       echo "--- проверка приложения ---"; curl -sS -o /dev/null -w "healthz: %{http_code}\n" http://127.0.0.1:8080/healthz;

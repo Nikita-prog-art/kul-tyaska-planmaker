@@ -180,6 +180,14 @@ func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		u := s.currentUser(r)
 		if u == nil {
+			// Конструктор сохраняет через fetch и ждёт JSON, а не страницу логина.
+			if wantsJSON(r) {
+				w.Header().Set("Content-Type", "application/json; charset=utf-8")
+				w.Header().Set("Cache-Control", "no-store")
+				w.WriteHeader(http.StatusUnauthorized)
+				_, _ = w.Write([]byte(`{"error":"сессия истекла — войдите заново"}`))
+				return
+			}
 			http.Redirect(w, r, "/login?next="+r.URL.Path, http.StatusSeeOther)
 			return
 		}

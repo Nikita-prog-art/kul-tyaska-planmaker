@@ -12,6 +12,11 @@
   var presets = readJSON('kt-presets') || [];
   var dirty = false;
   var filter = '';
+  var changeSeq = 0;   // растёт на каждую правку: видно, менялся ли план, пока шло сохранение
+  var savingCount = 0;   // сколько сохранений сейчас в полёте
+  /* Паузы между попытками сохранения. Сервис перезапускается за 2–5 секунд,
+     поэтому трёх повторов хватает, чтобы пережить обычный рестарт. */
+  var SAVE_RETRIES = [700, 1600, 3200];
 
   /* Сервер может отдать план со списками-null (так уезжает nil-срез Go),
      поэтому приводим план к предсказуемому виду до первой отрисовки. */
@@ -108,6 +113,7 @@
 
   function markDirty() {
     dirty = true;
+    changeSeq++;
     var badge = document.getElementById('kt-dirty');
     if (badge) badge.hidden = false;
   }
@@ -387,8 +393,9 @@
       h('div', { class: 'toolbar-actions' }, [
         h('button', { class: 'btn ghost', type: 'button', onclick: openImport, text: 'Каркас' }),
         h('button', { class: 'btn ghost', type: 'button', onclick: openExport, text: 'Экспорт' }),
-        h('button', { class: 'btn', type: 'button', onclick: save, text: 'Сохранить' }),
-        h('span', { class: 'dirty', id: 'kt-dirty', hidden: !dirty, text: 'есть несохранённое' })
+        h('button', { id: 'kt-save-btn', class: 'btn', type: 'button', onclick: save, text: 'Сохранить' }),
+        h('span', { class: 'dirty', id: 'kt-dirty', hidden: !dirty, text: 'есть несохранённое' }),
+        h('span', { class: 'save-status', id: 'kt-save-status', role: 'status', 'aria-live': 'polite', hidden: true })
       ])
     ]);
   }
@@ -1359,6 +1366,80 @@
     if (el) el.hidden = true;
   }
 
+  function delay(ms) {
+    return new Promise(function (resolve) { setTimeout(resolve, ms); });
+  }
+
+  function hhmm() {
+    var d = new Date();
+    return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+  }
+
+  /* setSaveStatus показывает, что происходит с сохранением: «сохраняю…»,
+     «сохранено в 14:03» или ошибку с кнопкой «Повторить». Ошибку не прячем
+     в alert: правки остаются в этой вкладке, и человек должен видеть, что делать. */
+  function setSaveStatus(kind, text, retry) {
+    var el = document.getElementById('kt-save-status');
+    if (!el) return;
+    el.className = 'save-status' + (kind ? ' ' + kind : '');
+    el.textContent = text || '';
+    el.hidden = !text;
+    if (retry) {
+      el.appendChild(document.createTextNode(' '));
+      el.appendChild(h('button', { class: 'btn ghost small', type: 'button', text: 'Повторить', onclick: save }));
+    }
+  }
+
+  /* trySave делает одну попытку. Возвращает объект, а не исключение:
+     retry — имеет ли смысл повторить, fatal — повторять бесполезно. */
+  function trySave(body) {
+    return fetch('/plans/' + encodeURIComponent(plan.id), {
+      method: 'POST',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+        'X-KT-Save': 'fetch'
+      },
+      body: body
+    }).then(function (res) {
+      var ct = res.headers.get('content-type') || '';
+      // Не JSON — значит, сессия кончилась и сервер отдал страницу логина.
+      if (ct.indexOf('application/json') < 0) {
+        return {
+          ok: false, retry: false, fatal: true,
+          error: res.status === 401 || res.redirected
+            ? 'Сессия истекла — войдите заново, правки остались в этой вкладке.'
+            : 'Сервис ответил ' + res.status + '. Правки остались в этой вкладке.'
+        };
+      }
+      return res.json().then(function (data) {
+        if (res.ok && data && data.ok) return { ok: true, updated_at: data.updated_at };
+        return {
+          ok: false,
+          retry: res.status >= 500 || res.status === 408 || res.status === 429,
+          fatal: res.status === 401,
+          error: (data && data.error) || ('Сервис ответил ' + res.status + '.')
+        };
+      }, function () {
+        return { ok: false, retry: true, error: 'Не разобрал ответ сервиса.' };
+      });
+    }, function () {
+      return { ok: false, retry: true, error: 'Сервис недоступен — похоже, идёт перезапуск.' };
+    });
+  }
+
+  function postState(body) {
+    var attempt = 0;
+    function next() {
+      return trySave(body).then(function (res) {
+        if (res.ok || res.fatal || !res.retry || attempt >= SAVE_RETRIES.length) return res;
+        return delay(SAVE_RETRIES[attempt++]).then(next);
+      });
+    }
+    return next();
+  }
+
   function save() {
     // Порядок уроков не трогаем: как игрок расставил, так и сохраняем.
     var state = {
@@ -1369,9 +1450,40 @@
       ladders: plan.ladders, accumulators: plan.accumulators, folios: plan.folios,
       requirements: plan.requirements || [], deferred_slots: plan.deferred_slots || 1
     };
-    document.getElementById('kt-state').value = JSON.stringify(state);
-    dirty = false;
-    document.getElementById('kt-save').submit();
+    var json = JSON.stringify(state);
+    document.getElementById('kt-state').value = json;
+    var form = document.getElementById('kt-save');
+    // Совсем старый браузер без fetch — пусть работает обычная отправка формы.
+    if (!window.fetch) {
+      dirty = false;
+      form.submit();
+      return;
+    }
+
+    var seq = changeSeq;
+    savingCount++;
+    setSaveStatus('saving', 'Сохраняю…', false);
+
+    postState('state=' + encodeURIComponent(json)).then(function (res) {
+      savingCount--;
+      if (res.ok) {
+        if (res.updated_at) plan.updated_at = res.updated_at;
+        // Если за время сохранения что-то поправили — не выдаём это за сохранённое.
+        if (changeSeq === seq) {
+          dirty = false;
+          var badge = document.getElementById('kt-dirty');
+          if (badge) badge.hidden = true;
+          setSaveStatus('ok', 'Сохранено в ' + hhmm(), false);
+        } else {
+          setSaveStatus('ok', 'Сохранено в ' + hhmm() + ', но есть новые правки', false);
+        }
+        return;
+      }
+      var msg = res.retry
+        ? 'Сервис не ответил за несколько секунд — похоже, идёт перезапуск. Правки остались в этой вкладке.'
+        : res.error;
+      setSaveStatus('err', 'Не сохранено: ' + msg, res.retry);
+    });
   }
 
   function parseNum(v) {
@@ -1406,7 +1518,8 @@
   });
 
   window.addEventListener('beforeunload', function (e) {
-    if (dirty) { e.preventDefault(); e.returnValue = ''; }
+    // saving тоже держим: закрытие вкладки оборвёт незавершённый запрос.
+    if (dirty || savingCount > 0) { e.preventDefault(); e.returnValue = ''; }
   });
 
   var search = document.getElementById('kt-search');

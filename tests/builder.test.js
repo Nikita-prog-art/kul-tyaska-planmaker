@@ -35,6 +35,32 @@ function pageHtml(p) {
 </body></html>`;
 }
 
+// fakeResponse — такой же ответ, какой отдаёт сервер на сохранение через fetch.
+function fakeResponse(body, status) {
+  const code = status || 200;
+  return {
+    ok: code >= 200 && code < 300,
+    status: code,
+    redirected: false,
+    headers: { get: (k) => (String(k).toLowerCase() === 'content-type' ? 'application/json; charset=utf-8' : null) },
+    json: () => Promise.resolve(body),
+    text: () => Promise.resolve(JSON.stringify(body))
+  };
+}
+
+// stubFetch вешает на окно управляемый fetch: тест задаёт ответы по очереди,
+// а все запросы складываются в w.__fetches.
+function stubFetch(w, responses) {
+  const queue = responses.slice();
+  w.__fetches = [];
+  w.fetch = function (url, opts) {
+    w.__fetches.push({ url: url, opts: opts, body: opts && opts.body });
+    const next = queue.length > 1 ? queue.shift() : queue[0];
+    if (typeof next === 'function') return next(url, opts);
+    return Promise.resolve(next);
+  };
+}
+
 // bootPage поднимает страницу в jsdom и выполняет оба скрипта конструктора.
 function bootPage(p) {
   const page = new JSDOM(pageHtml(p), { runScripts: 'outside-only', url: 'https://kultyaska.test/plans/' + p.id });
@@ -44,6 +70,7 @@ function bootPage(p) {
   w.HTMLFormElement.prototype.submit = function () {
     w.__submitted = w.document.getElementById('kt-state').value;
   };
+  stubFetch(w, [fakeResponse({ ok: true, updated_at: '2026-11-14T00:00:00Z' })]);
   w.eval(fs.readFileSync(path.join(root, 'internal/web/static/engine.js'), 'utf8'));
   w.eval(fs.readFileSync(path.join(root, 'internal/web/static/builder.js'), 'utf8'));
   return w;
@@ -59,6 +86,7 @@ window.alert = (msg) => { throw new Error('alert: ' + msg); };
 
 let submitted = null;
 window.HTMLFormElement.prototype.submit = function () { submitted = document.getElementById('kt-state').value; };
+stubFetch(window, [fakeResponse({ ok: true, updated_at: '2026-11-14T00:00:00Z' })]);
 
 window.eval(fs.readFileSync(path.join(root, 'internal/web/static/engine.js'), 'utf8'));
 window.eval(fs.readFileSync(path.join(root, 'internal/web/static/builder.js'), 'utf8'));
@@ -512,7 +540,7 @@ test('повторяемую покупку можно взять дважды',
   assert.strictEqual(spent2 - spent, 5, 'вторая лестница стоит ещё 5 XP');
 
   Array.prototype.find.call(d.querySelectorAll('.btn'), (b) => b.textContent === 'Сохранить').click();
-  const saved = JSON.parse(w.__submitted);
+  const saved = JSON.parse(w.document.getElementById('kt-state').value);
   const pick = saved.picks.filter((p) => p.key === 'item:lestnica_v_nebo')[0];
   assert.strictEqual(pick.qty, 2, 'количество уезжает в сохранение');
 
@@ -746,11 +774,6 @@ test('обновление каркаса говорит, если покупк�
   assert.ok(st.picks.some((x) => x.key === 'lesson:ping_sistem'), 'остальные покупки на месте');
 });
 
-if (failures) {
-  console.error('\nПровалено проверок: ' + failures);
-  process.exit(1);
-}
-console.log('\nВсе проверки конструктора пройдены.');
 
 test('«Разложить уроки по требованиям» раскладывает уроки и просит сохранить', () => {
   // Уроки стоят как попало: «пинг систем» (минимум 10-м) раньше «ученья — свет!»
@@ -786,9 +809,8 @@ test('«Разложить уроки по требованиям» раскла
 
   assert.strictEqual(d.getElementById('kt-dirty').hidden, false, 'план помечен несохранённым — иначе порядок потеряется');
 
-  w.HTMLFormElement.prototype.submit = function () { w.__state = d.getElementById('kt-state').value; };
   d.querySelector('.toolbar .btn:not(.ghost)').click(); // «Сохранить»
-  const st = JSON.parse(w.__state);
+  const st = JSON.parse(d.getElementById('kt-state').value);
   assert.deepStrictEqual(KT.computeSummary(st, sections).warnings.filter((x) => /минимум/.test(x)), [],
     'после раскладки нарушений «минимум n-ным» нет');
   const at = (key) => st.picks.findIndex((x) => x.key === key);
@@ -846,9 +868,8 @@ test('«Разложить уроки» не спотыкается о фикс�
   const hint = d.querySelector('#sec-lessons .sec-tools .sort-hint');
   assert.ok(/порядок разложен/.test(hint.textContent), 'кнопка говорит, что порядок разложен: ' + hint.textContent);
 
-  w.HTMLFormElement.prototype.submit = function () { w.__state = d.getElementById('kt-state').value; };
   d.querySelector('.toolbar .btn:not(.ghost)').click(); // «Сохранить»
-  const st = JSON.parse(w.__state);
+  const st = JSON.parse(d.getElementById('kt-state').value);
   const sum = KT.computeSummary(st, sections);
   assert.deepStrictEqual(sum.warnings.filter((x) => /минимум/.test(x)), [],
     'после раскладки нарушений «минимум n-ным» нет');
@@ -972,3 +993,105 @@ test('«ост.» в секциях идёт по порядку, даже ес�
   assert.deepStrictEqual(nums('other'), ['100', '895'], 'после покупки остаток 895');
   assert.strictEqual(d.getElementById('sum-left').textContent, '895', 'сайдбар сходится с секциями');
 });
+
+// --- сохранение через fetch: повторы и понятные ошибки ------------------
+
+const asyncTests = [];
+function testAsync(name, fn) { asyncTests.push({ name: name, fn: fn }); }
+
+// tick даёт промисам провернуться: fetch-заглушка отвечает сразу.
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+testAsync('сохранение переживает 502 и повторяет запрос', async () => {
+  const w = bootPage(JSON.parse(JSON.stringify(plan)));
+  const d = w.document;
+  w.setTimeout = (fn) => { fn(); return 0; };   // паузы между попытками не ждём
+  stubFetch(w, [
+    fakeResponse({ error: 'сервис перезапускается' }, 502),
+    fakeResponse({ error: 'сервис перезапускается' }, 503),
+    fakeResponse({ ok: true, updated_at: '2026-11-14T03:00:00Z' })
+  ]);
+
+  d.querySelector('.toolbar .btn:not(.ghost)').click();
+  await tick();
+
+  assert.strictEqual(w.__fetches.length, 3, 'три попытки: 502, 503 и успех');
+  assert.ok(/^Сохранено/.test(d.getElementById('kt-save-status').textContent),
+    'после успеха видно «Сохранено»: ' + d.getElementById('kt-save-status').textContent);
+  assert.strictEqual(d.getElementById('kt-dirty').hidden, true, '«есть несохранённое» гаснет');
+  assert.ok(w.__fetches[0].body.indexOf('state=') === 0, 'на сервер уходит state');
+  assert.strictEqual(w.__fetches[0].url, '/plans/' + plan.id, 'сохраняем свой план');
+});
+
+testAsync('после всех повторов показывает ошибку и «Повторить»', async () => {
+  const w = bootPage(JSON.parse(JSON.stringify(plan)));
+  const d = w.document;
+  w.setTimeout = (fn) => { fn(); return 0; };
+  stubFetch(w, [fakeResponse({ error: 'сервис перезапускается' }, 502)]);
+
+  // Правим план, чтобы он честно считался несохранённым.
+  const bal = d.getElementById('kt-balance');
+  bal.value = '321';
+  bal.dispatchEvent(new w.Event('input', { bubbles: true }));
+
+  d.querySelector('.toolbar .btn:not(.ghost)').click();
+  await tick();
+
+  assert.strictEqual(w.__fetches.length, 4, 'одна попытка и три повтора');
+  const status = d.getElementById('kt-save-status');
+  assert.ok(/Не сохранено/.test(status.textContent), 'ошибка видна: ' + status.textContent);
+  assert.ok(/перезапуск/.test(status.textContent), 'объясняет причину');
+  assert.ok(status.querySelector('button'), 'есть кнопка «Повторить»');
+  assert.strictEqual(d.getElementById('kt-dirty').hidden, false, 'план остаётся несохранённым');
+  assert.ok(d.getElementById('kt-state').value.length > 0, 'состояние осталось в форме — не потерялось');
+});
+
+testAsync('400 не повторяется: показывает текст сервера и не врёт про успех', async () => {
+  const w = bootPage(JSON.parse(JSON.stringify(plan)));
+  const d = w.document;
+  stubFetch(w, [fakeResponse({ error: 'не разобрал состояние плана' }, 400)]);
+
+  const bal = d.getElementById('kt-balance');
+  bal.value = '77';
+  bal.dispatchEvent(new w.Event('input', { bubbles: true }));
+
+  d.querySelector('.toolbar .btn:not(.ghost)').click();
+  await tick();
+
+  assert.strictEqual(w.__fetches.length, 1, 'повторять 400 бессмысленно');
+  const status = d.getElementById('kt-save-status');
+  assert.ok(/не разобрал состояние плана/.test(status.textContent), status.textContent);
+  assert.ok(!status.querySelector('button'), 'кнопки «Повторить» нет — повтор не поможет');
+  assert.strictEqual(d.getElementById('kt-dirty').hidden, false, 'план не считается сохранённым');
+});
+
+testAsync('истёкшая сессия: понятное сообщение без повторов', async () => {
+  const w = bootPage(JSON.parse(JSON.stringify(plan)));
+  const d = w.document;
+  stubFetch(w, [fakeResponse({ error: 'сессия истекла — войдите заново' }, 401)]);
+
+  d.querySelector('.toolbar .btn:not(.ghost)').click();
+  await tick();
+
+  assert.strictEqual(w.__fetches.length, 1, '401 не повторяем');
+  const status = d.getElementById('kt-save-status');
+  assert.ok(/сессия истекла/.test(status.textContent), status.textContent);
+  assert.ok(!status.querySelector('button'), 'кнопки «Повторить» нет');
+});
+
+(async () => {
+  for (const t of asyncTests) {
+    try {
+      await t.fn();
+      console.log('  ✓ ' + t.name);
+    } catch (e) {
+      failures++;
+      console.error('  ✗ ' + t.name + '\n    ' + (e.message || e).toString().split('\n').join('\n    '));
+    }
+  }
+  if (failures) {
+    console.error('\nПровалено проверок: ' + failures);
+    process.exit(1);
+  }
+  console.log('\nВсе проверки конструктора пройдены.');
+})();
