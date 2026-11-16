@@ -153,9 +153,11 @@ func TestFullFlow(t *testing.T) {
 		}
 	}
 
-	// Сохранение состояния и проверка экспорта.
+	// Сохранение состояния и проверка экспорта. Осознанная правка магазина
+	// разрешена, только если черновик собран на текущей ревизии плана.
 	state := map[string]any{
-		"title": "Праведность без контроля пола", "emoji": "🩸", "balance": 1605.24148,
+		"base_updated_at": planFromPage(t, body)["updated_at"],
+		"title":           "Праведность без контроля пола", "emoji": "🩸", "balance": 1605.24148,
 		"decimals": true, "skeleton": "тест",
 		"shop": []map[string]any{
 			{"key": "lesson:a", "kind": "lesson", "section": "lessons", "title": "отмена детской смертности", "fixed": true, "cost": 1},
@@ -794,6 +796,234 @@ func TestPlanSaveJSON(t *testing.T) {
 	// Без заголовка — прежний редирект: старый путь не сломан.
 	if plain := c.post(planURL, url.Values{"state": {string(raw)}}); plain.StatusCode != http.StatusSeeOther {
 		t.Errorf("обычная форма: код %d, ждал 303", plain.StatusCode)
+	}
+}
+
+// fieldStrings вытаскивает значения поля из JSON-массива объектов
+// (так в тесте выглядят shop и picks, разобранные из страницы).
+func fieldStrings(v any, field string) []string {
+	rows, _ := v.([]any)
+	out := make([]string, 0, len(rows))
+	for _, raw := range rows {
+		if m, ok := raw.(map[string]any); ok {
+			if s, ok := m[field].(string); ok {
+				out = append(out, s)
+			}
+		}
+	}
+	return out
+}
+
+func hasString(list []string, want string) bool {
+	for _, s := range list {
+		if s == want {
+			return true
+		}
+	}
+	return false
+}
+
+// TestPlanSaveRebasesStaleSkeleton — вкладка, открытая до миграции, не
+// откатывает каркас: сервер оставляет свой магазин и каркас, а выбор игрока
+// переносит на него. Переименованные позиции находятся по названию,
+// исчезнувшие — попадают в lost, чтобы о них можно было сказать вслух.
+func TestPlanSaveRebasesStaleSkeleton(t *testing.T) {
+	c := newClient(t)
+	c.post("/register", url.Values{
+		"nick": {"staledraft"}, "discord": {"@staledraft"}, "password": {"verysecret1"}, "password2": {"verysecret1"},
+	})
+	created := c.post("/plans", url.Values{"title": {"До миграции"}, "preset": {"09-kontinent-iskonnogo-balansa"}})
+	planURL := created.Header.Get("Location")
+	if !strings.HasPrefix(planURL, "/plans/") {
+		t.Fatalf("план не создался: %q", planURL)
+	}
+	_, body := c.getBody(planURL)
+	base, _ := planFromPage(t, body)["updated_at"].(string)
+	if base == "" {
+		t.Fatal("у плана нет updated_at — черновику не на что опереться")
+	}
+
+	// Пока вкладка открыта, каркас обновили. Сохранение с текущей ревизией
+	// вправе менять магазин — так выглядят правки каркаса в самом плане.
+	migrated := map[string]any{
+		"base_updated_at": base,
+		"title":           "После миграции",
+		"balance":         100.0,
+		"skeleton":        "Жизнь 9",
+		"shop": []map[string]any{
+			{"key": "lesson:keep", "kind": "lesson", "section": "lessons", "title": "остаётся", "cost": 5},
+			{"key": "lesson:renamed_new", "kind": "lesson", "section": "lessons", "title": "переименованный", "cost": 20},
+		},
+		"picks":     []map[string]any{{"key": "lesson:keep"}},
+		"deferred":  []map[string]any{},
+		"not_taken": []string{},
+	}
+	raw, _ := json.Marshal(migrated)
+	resp, out := c.postJSON(planURL, url.Values{"state": {string(raw)}})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("сохранение миграции: код %d, тело %s", resp.StatusCode, out)
+	}
+	var first struct {
+		OK        bool      `json:"ok"`
+		Rebased   bool      `json:"rebased"`
+		UpdatedAt time.Time `json:"updated_at"`
+	}
+	if err := json.Unmarshal([]byte(out), &first); err != nil {
+		t.Fatalf("ответ миграции не разобрался: %v (%s)", err, out)
+	}
+	if first.Rebased {
+		t.Errorf("сохранение на текущей ревизии не должно ребейзиться: %s", out)
+	}
+	if first.UpdatedAt.IsZero() || first.UpdatedAt.UTC().Format(time.RFC3339Nano) == base {
+		t.Fatalf("ревизия не сменилась после миграции: %v", first.UpdatedAt)
+	}
+
+	// Старая вкладка присылает СВОЙ магазин и свою ревизию. Её магазин
+	// не должен вернуться на сервер, а покупки — перенестись на новый.
+	stale := map[string]any{
+		"base_updated_at": base,
+		"title":           "Правки игрока",
+		"balance":         555.0,
+		"skeleton":        "Жизнь 8",
+		"shop": []map[string]any{
+			{"key": "lesson:gone", "kind": "lesson", "section": "lessons", "title": "исчезнувший", "cost": 10},
+			{"key": "lesson:renamed_old", "kind": "lesson", "section": "lessons", "title": "переименованный", "cost": 1},
+			{"key": "lesson:keep", "kind": "lesson", "section": "lessons", "title": "остаётся", "cost": 1},
+		},
+		"picks": []map[string]any{
+			{"key": "lesson:gone"},
+			{"key": "lesson:renamed_old"},
+			{"key": "lesson:keep"},
+		},
+		"deferred":  []map[string]any{{"key": "lesson:gone"}},
+		"not_taken": []string{"lesson:renamed_old", "lesson:gone"},
+	}
+	raw, _ = json.Marshal(stale)
+	resp, out = c.postJSON(planURL, url.Values{"state": {string(raw)}})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("сохранение старой вкладки: код %d, тело %s", resp.StatusCode, out)
+	}
+	var got struct {
+		OK      bool     `json:"ok"`
+		Rebased bool     `json:"rebased"`
+		Lost    []string `json:"lost"`
+	}
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("ответ не разобрался: %v (%s)", err, out)
+	}
+	if !got.OK || !got.Rebased {
+		t.Fatalf("старая ревизия должна ребейзиться: %s", out)
+	}
+	if len(got.Lost) != 1 || got.Lost[0] != "исчезнувший" {
+		t.Errorf("lost = %v, ждал [исчезнувший]", got.Lost)
+	}
+
+	// На сервере остался новый каркас, а правки игрока применились.
+	_, body = c.getBody(planURL)
+	saved := planFromPage(t, body)
+	if saved["skeleton"] != "Жизнь 9" {
+		t.Errorf("старый каркас откатил миграцию: %v", saved["skeleton"])
+	}
+	if saved["title"] != "Правки игрока" {
+		t.Errorf("заголовок игрока потерялся: %v", saved["title"])
+	}
+	if saved["balance"] != float64(555) {
+		t.Errorf("баланс игрока потерялся: %v", saved["balance"])
+	}
+	shop := fieldStrings(saved["shop"], "key")
+	if hasString(shop, "lesson:gone") || hasString(shop, "lesson:renamed_old") {
+		t.Errorf("магазин старой вкладки вернулся: %v", shop)
+	}
+	if !hasString(shop, "lesson:keep") || !hasString(shop, "lesson:renamed_new") {
+		t.Errorf("новый магазин потерялся: %v", shop)
+	}
+	picks := fieldStrings(saved["picks"], "key")
+	if hasString(picks, "lesson:gone") || hasString(picks, "lesson:renamed_old") {
+		t.Errorf("в плане остались старые ключи: %v", picks)
+	}
+	if !hasString(picks, "lesson:keep") || !hasString(picks, "lesson:renamed_new") {
+		t.Errorf("покупки не перенеслись: %v", picks)
+	}
+	notTaken := fieldStringsAny(saved["not_taken"])
+	if hasString(notTaken, "lesson:gone") {
+		t.Errorf("«не беру» на исчезнувшую позицию осталось: %v", notTaken)
+	}
+}
+
+// fieldStringsAny — строковый массив, разобранный из JSON.
+func fieldStringsAny(v any) []string {
+	rows, _ := v.([]any)
+	out := make([]string, 0, len(rows))
+	for _, raw := range rows {
+		if s, ok := raw.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// TestPlanSaveWithoutBaseKeepsServerShop — вкладка, загруженная до выкладки,
+// не присылает base_updated_at. Доверять её магазину нельзя: иначе она
+// откатит миграцию. Игроковые поля при этом сохраняются.
+func TestPlanSaveWithoutBaseKeepsServerShop(t *testing.T) {
+	c := newClient(t)
+	c.post("/register", url.Values{
+		"nick": {"legacytab"}, "discord": {"@legacytab"}, "password": {"verysecret1"}, "password2": {"verysecret1"},
+	})
+	created := c.post("/plans", url.Values{"title": {"Старая вкладка"}, "preset": {"08-zaskoruzlye-piramidy"}})
+	planURL := created.Header.Get("Location")
+	_, body := c.getBody(planURL)
+	before := fieldStrings(planFromPage(t, body)["shop"], "key")
+	if len(before) == 0 {
+		t.Fatal("у плана пустой магазин")
+	}
+
+	stale := map[string]any{
+		"title":   "Без ревизии",
+		"balance": 321.0,
+		"shop": []map[string]any{
+			{"key": "lesson:ghost", "kind": "lesson", "section": "lessons", "title": "призрак", "cost": 1},
+		},
+		"picks":     []map[string]any{{"key": "lesson:ghost"}},
+		"deferred":  []map[string]any{},
+		"not_taken": []string{},
+	}
+	raw, _ := json.Marshal(stale)
+	resp, out := c.postJSON(planURL, url.Values{"state": {string(raw)}})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("сохранение без ревизии: код %d, тело %s", resp.StatusCode, out)
+	}
+	var got struct {
+		Rebased bool     `json:"rebased"`
+		Lost    []string `json:"lost"`
+	}
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("ответ не разобрался: %v (%s)", err, out)
+	}
+	if !got.Rebased {
+		t.Errorf("пустая ревизия должна ребейзиться, а не менять каркас: %s", out)
+	}
+	if len(got.Lost) != 1 || got.Lost[0] != "призрак" {
+		t.Errorf("lost = %v, ждал [призрак]", got.Lost)
+	}
+
+	_, body = c.getBody(planURL)
+	saved := planFromPage(t, body)
+	shop := fieldStrings(saved["shop"], "key")
+	if hasString(shop, "lesson:ghost") {
+		t.Errorf("чужой магазин старой вкладки попал в план: %v", shop)
+	}
+	if len(shop) != len(before) {
+		t.Errorf("магазин изменился: было %d позиций, стало %d", len(before), len(shop))
+	}
+	if !hasString(shop, "lesson:ping_sistem") {
+		t.Errorf("серверный магазин потерялся: %v", shop)
+	}
+	if picks := fieldStrings(saved["picks"], "key"); hasString(picks, "lesson:ghost") {
+		t.Errorf("покупка-призрак осталась в плане: %v", picks)
+	}
+	if saved["title"] != "Без ревизии" || saved["balance"] != float64(321) {
+		t.Errorf("правки игрока не сохранились: title=%v balance=%v", saved["title"], saved["balance"])
 	}
 }
 

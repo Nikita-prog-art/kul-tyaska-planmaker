@@ -17,6 +17,8 @@
   /* Паузы между попытками сохранения. Сервис перезапускается за 2–5 секунд,
      поэтому трёх повторов хватает, чтобы пережить обычный рестарт. */
   var SAVE_RETRIES = [700, 1600, 3200];
+  var DRAFT_PREFIX = 'kt-draft:';
+  var pendingDraft = null;   // черновик со старой ревизией: ждём решения игрока
 
   /* Сервер может отдать план со списками-null (так уезжает nil-срез Go),
      поэтому приводим план к предсказуемому виду до первой отрисовки. */
@@ -43,6 +45,196 @@
     });
     enforceLocked(p);
     return p;
+  }
+
+  // --- черновик в localStorage ------------------------------------------
+  // Черновик хранит только действия игрока и ревизию, на которой они сделаны.
+  // Магазин, каркас и цены в нём не лежат: они всегда берутся с сервера.
+  // Иначе открытая вкладка со старым каркасом однажды откатила бы миграцию.
+
+  function sameRevision(a, b) {
+    a = String(a || '').trim();
+    b = String(b || '').trim();
+    return a !== '' && a === b;
+  }
+
+  function draftStore() {
+    try { return window.localStorage; } catch (e) { return null; }
+  }
+
+  function readDraft() {
+    var store = draftStore();
+    if (!store) return null;
+    var raw = null;
+    try { raw = store.getItem(DRAFT_PREFIX + plan.id); } catch (e) { return null; }
+    if (!raw) return null;
+    try {
+      var d = JSON.parse(raw);
+      return d && typeof d === 'object' ? d : null;
+    } catch (e) { return null; }
+  }
+
+  /* draftFromPlan оставляет только то, что выбрал игрок. Ни shop, ни
+     skeleton, ни цены, ни требования сюда не попадают — их источник сервер. */
+  function draftFromPlan() {
+    return {
+      v: 1,
+      plan_id: plan.id,
+      base_updated_at: plan.updated_at || '',
+      title: plan.title,
+      emoji: plan.emoji || '',
+      balance: plan.balance,
+      notes: plan.notes || '',
+      decimals: !!(plan.options && plan.options.decimals),
+      picks: (plan.picks || []).map(function (pk) {
+        var out = { key: pk.key, qty: pk.qty || 1 };
+        if (pk.value !== undefined) out.value = pk.value;
+        if (pk.note) out.note = pk.note;
+        return out;
+      }),
+      deferred: (plan.deferred || []).map(function (d) { return { key: d.key, slot: d.slot || 1 }; }),
+      not_taken: (plan.not_taken || []).slice(),
+      ladders: (plan.ladders || []).map(function (l) { return { key: l.key, value: l.value }; }),
+      accumulators: (plan.accumulators || []).map(function (a) {
+        return { key: a.key, name: a.name || '', activate: !!a.activate };
+      }),
+      folios: (plan.folios || []).map(function (f) {
+        return { key: f.key, name: f.name || '', take: !!f.take, deferred: !!f.deferred };
+      })
+    };
+  }
+
+  function writeDraft() {
+    // Пока висит вопрос «перенести или выбросить», не затираем старый
+    // черновик состоянием серверной страницы: иначе решать будет нечего.
+    if (pendingDraft) return;
+    var store = draftStore();
+    if (!store) return;
+    try { store.setItem(DRAFT_PREFIX + plan.id, JSON.stringify(draftFromPlan())); } catch (e) { /* места нет — переживём */ }
+  }
+
+  function dropDraft() {
+    var store = draftStore();
+    if (!store) return;
+    try { store.removeItem(DRAFT_PREFIX + plan.id); } catch (e) { /* ignore */ }
+  }
+
+  /* applyDraft накладывает действия игрока на текущий (серверный) план.
+     Совпавшие по ключу покупки, отложенные, шкалы и отметки переживают
+     смену каркаса; исчезнувшие позиции убираются и перечисляются вслух. */
+  function applyDraft(d) {
+    if (typeof d.title === 'string' && d.title) plan.title = d.title;
+    if (typeof d.emoji === 'string') plan.emoji = d.emoji;
+    if (d.balance !== undefined && d.balance !== null) plan.balance = parseNum(d.balance);
+    if (typeof d.notes === 'string') plan.notes = d.notes;
+    if (!plan.options) plan.options = { decimals: true, numbered: true };
+    if (typeof d.decimals === 'boolean') plan.options.decimals = d.decimals;
+
+    var lost = [];
+    var seen = {};
+    var picks = [];
+    (d.picks || []).forEach(function (pk) {
+      if (!pk || !pk.key) return;
+      if (!item(pk.key)) { lost.push(pk.key); return; }
+      if (seen[pk.key]) { seen[pk.key].qty += Number(pk.qty) || 1; return; }
+      var copy = { key: pk.key, qty: Number(pk.qty) > 0 ? Number(pk.qty) : 1 };
+      if (pk.value !== undefined) copy.value = pk.value;
+      if (pk.note) copy.note = pk.note;
+      seen[pk.key] = copy;
+      picks.push(copy);
+    });
+    picks.forEach(function (pk) {
+      var it = item(pk.key);
+      var limit = it && it.repeat > 1 ? it.repeat : 1;
+      if (pk.qty > limit) pk.qty = limit;
+    });
+    plan.picks = picks;
+
+    var deferred = [];
+    var seenDeferred = {};
+    (d.deferred || []).forEach(function (x) {
+      if (!x || !x.key) return;
+      if (!item(x.key)) { lost.push(x.key); return; }
+      if (seenDeferred[x.key]) return;
+      seenDeferred[x.key] = true;
+      deferred.push({ key: x.key, slot: deferred.length + 1 });
+    });
+    plan.deferred = deferred;
+
+    var notTaken = [];
+    (d.not_taken || []).forEach(function (k) {
+      if (typeof k === 'string' && item(k) && notTaken.indexOf(k) < 0) notTaken.push(k);
+    });
+    plan.not_taken = notTaken;
+
+    // У шкал переносим только выбранное значение: границы и цену
+    // по-прежнему задаёт серверный каркас.
+    (d.ladders || []).forEach(function (dl) {
+      if (!dl || !dl.key) return;
+      var ladder = null;
+      (plan.ladders || []).forEach(function (l) { if (l.key === dl.key) ladder = l; });
+      if (!ladder) return;
+      var v = Number(dl.value);
+      if (!isFinite(v)) return;
+      if (typeof ladder.from === 'number' && v < ladder.from) v = ladder.from;
+      if (typeof ladder.to === 'number' && v > ladder.to) v = ladder.to;
+      ladder.value = v;
+    });
+
+    function mark(list, key, name) {
+      if (!Array.isArray(list)) return null;
+      for (var i = 0; i < list.length; i++) {
+        if ((key && list[i].key === key) || (name && list[i].name === name)) return list[i];
+      }
+      return null;
+    }
+    (plan.accumulators || []).forEach(function (a) {
+      var old = mark(d.accumulators, a.key, a.name);
+      if (old) a.activate = !!old.activate;
+    });
+    (plan.folios || []).forEach(function (f) {
+      var old = mark(d.folios, f.key, f.name);
+      if (old) { f.take = !!old.take; f.deferred = !!old.deferred; }
+    });
+
+    enforceLocked(plan);
+    renumberSlots();
+    if (lost.length) {
+      var uniq = lost.filter(function (k, i) { return lost.indexOf(k) === i; });
+      alert('В новом каркасе нет покупок: ' + uniq.join(', ') +
+        '. Они убраны из плана — в этом посмертии их не предлагают, очки освободились.');
+    }
+  }
+
+  function transferDraft() {
+    if (!pendingDraft) return;
+    var d = pendingDraft;
+    pendingDraft = null;
+    applyDraft(d);
+    markDirty();
+    render();
+    setSaveStatus('ok', 'Черновик перенесён на новый каркас — сохраните план.', false);
+  }
+
+  function discardDraft() {
+    pendingDraft = null;
+    dropDraft();
+    render();
+    setSaveStatus('ok', 'Черновик выброшен — осталась серверная версия плана.', false);
+  }
+
+  function renderDraftNotice() {
+    if (!pendingDraft) return null;
+    return h('div', { class: 'draft-notice', id: 'kt-draft-notice' }, [
+      h('div', { class: 'draft-notice-text' }, [
+        h('b', { text: 'План обновлён на сервере. ' }),
+        'Черновик сделан на старой версии каркаса. Перенести ваши правки?'
+      ]),
+      h('div', { class: 'draft-notice-actions' }, [
+        h('button', { class: 'btn', type: 'button', text: 'Перенести', onclick: transferDraft }),
+        h('button', { class: 'btn ghost', type: 'button', text: 'Выбросить', onclick: discardDraft })
+      ])
+    ]);
   }
 
   /* enforceLocked доставляет в план позиции, которые он обязан содержать
@@ -116,6 +308,9 @@
     changeSeq++;
     var badge = document.getElementById('kt-dirty');
     if (badge) badge.hidden = false;
+    // Каждая правка сразу оседает в черновике: перезапуск сервиса или
+    // закрытая вкладка не должны стоить игроку выбора.
+    writeDraft();
   }
 
   // --- состояние выбора -------------------------------------------------
@@ -342,6 +537,8 @@
     var side = builder.querySelector('.sidebar');
     var sideTop = side ? side.scrollTop : 0;
     builder.textContent = '';
+    var notice = renderDraftNotice();
+    if (notice) builder.appendChild(notice);
     builder.appendChild(renderToolbar());
     var grid = h('div', { class: 'builder-grid' }, [
       h('div', { class: 'builder-main', id: 'kt-sections' }, renderSections()),
@@ -1390,6 +1587,18 @@
     }
   }
 
+  /* addReloadButton предлагает перечитать страницу, когда сервер перенёс
+     черновик на новый каркас: в этой вкладке магазин всё ещё старый. */
+  function addReloadButton() {
+    var el = document.getElementById('kt-save-status');
+    if (!el) return;
+    el.appendChild(document.createTextNode(' '));
+    el.appendChild(h('button', {
+      class: 'btn ghost small', type: 'button', text: 'Обновить',
+      onclick: function () { window.location.reload(); }
+    }));
+  }
+
   /* trySave делает одну попытку. Возвращает объект, а не исключение:
      retry — имеет ли смысл повторить, fatal — повторять бесполезно. */
   function trySave(body) {
@@ -1414,7 +1623,13 @@
         };
       }
       return res.json().then(function (data) {
-        if (res.ok && data && data.ok) return { ok: true, updated_at: data.updated_at };
+        if (res.ok && data && data.ok) {
+          return {
+            ok: true, updated_at: data.updated_at,
+            rebased: !!data.rebased,
+            lost: Array.isArray(data.lost) ? data.lost : []
+          };
+        }
         return {
           ok: false,
           retry: res.status >= 500 || res.status === 408 || res.status === 429,
@@ -1441,9 +1656,14 @@
   }
 
   function save() {
+    if (pendingDraft) {
+      setSaveStatus('err', 'Сначала выберите, что делать с черновиком: «Перенести» или «Выбросить».', false);
+      return;
+    }
     // Порядок уроков не трогаем: как игрок расставил, так и сохраняем.
     var state = {
       title: plan.title, emoji: plan.emoji, balance: plan.balance, notes: plan.notes || '',
+      base_updated_at: plan.updated_at || '',
       decimals: !!(plan.options && plan.options.decimals), skeleton: plan.skeleton || '',
       earned: plan.earned || 0, multipliers: plan.multipliers || [], source: plan.source || '',
       shop: plan.shop, picks: plan.picks, deferred: plan.deferred, not_taken: plan.not_taken,
@@ -1467,14 +1687,38 @@
     postState('state=' + encodeURIComponent(json)).then(function (res) {
       savingCount--;
       if (res.ok) {
+        // Сервер мог не принять наш каркас: пока вкладка была открыта,
+        // план обновили (миграция, вторая вкладка, правка админом).
+        // Он перенёс выбор игрока на свою версию — говорим об этом.
+        if (res.rebased) {
+          var lost = res.lost || [];
+          var msg = 'Каркас обновился — план перенесён на серверную версию.';
+          if (lost.length) msg += ' Потеряно: ' + lost.join(', ') + '.';
+          if (changeSeq === seq) {
+            dirty = false;
+            dropDraft();
+            var badgeRebased = document.getElementById('kt-dirty');
+            if (badgeRebased) badgeRebased.hidden = true;
+            setSaveStatus('ok', msg + ' Обновите страницу, чтобы увидеть новый каркас.', false);
+            addReloadButton();
+          } else {
+            // Новые правки сделаны поверх старого каркаса: базу не двигаем,
+            // иначе следующее сохранение закрепит устаревший магазин.
+            writeDraft();
+            setSaveStatus('ok', msg + ' Но есть новые правки — сохраните их ещё раз.', false);
+          }
+          return;
+        }
         if (res.updated_at) plan.updated_at = res.updated_at;
         // Если за время сохранения что-то поправили — не выдаём это за сохранённое.
         if (changeSeq === seq) {
           dirty = false;
+          dropDraft();
           var badge = document.getElementById('kt-dirty');
           if (badge) badge.hidden = true;
           setSaveStatus('ok', 'Сохранено в ' + hhmm(), false);
         } else {
+          writeDraft();
           setSaveStatus('ok', 'Сохранено в ' + hhmm() + ', но есть новые правки', false);
         }
         return;
@@ -1524,6 +1768,22 @@
 
   var search = document.getElementById('kt-search');
   if (search) search.addEventListener('input', function (e) { applyFilter(e.target.value); });
+
+  // Черновик: молча восстанавливаем только на той же ревизии. Если сервер
+  // успел обновиться — сначала спрашиваем, а не затираем миграцию.
+  var savedDraft = readDraft();
+  if (savedDraft && savedDraft.v === 1 && savedDraft.plan_id === plan.id) {
+    if (sameRevision(savedDraft.base_updated_at, plan.updated_at)) {
+      applyDraft(savedDraft);
+      dirty = true;
+      changeSeq++;
+      writeDraft();
+    } else {
+      pendingDraft = savedDraft;
+    }
+  } else if (savedDraft) {
+    dropDraft();
+  }
 
   // Порядок уроков builder больше не меняет сам: он двигает его только
   // по кнопке «Разложить уроки по требованиям» или «поставить после …».

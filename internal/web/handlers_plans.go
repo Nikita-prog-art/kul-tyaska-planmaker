@@ -125,6 +125,9 @@ type saveState struct {
 	Requirements []plan.Requirement `json:"requirements"`
 	// DeferredSlots — сколько слотов «невыученных» открыто в каркасе.
 	DeferredSlots int `json:"deferred_slots"`
+	// BaseUpdatedAt — ревизия плана, на которой собран черновик.
+	// Пустое значение означает старую вкладку: её магазин не авторитетен.
+	BaseUpdatedAt string `json:"base_updated_at"`
 }
 
 // wantsJSON — сохранение пришло из конструктора через fetch, а не из формы.
@@ -160,40 +163,21 @@ func (s *Server) handlePlanSave(w http.ResponseWriter, r *http.Request) {
 		s.saveError(w, r, http.StatusBadRequest, "не разобрал состояние плана: "+err.Error())
 		return
 	}
-	if t := strings.TrimSpace(st.Title); t != "" {
-		p.Title = t
+	// Ревизия, на которой сделан черновик. Если она отстала от сервера
+	// (миграция каркаса, вторая вкладка, правка админом), магазин и каркас
+	// из запроса не применяем: иначе открытая вкладка откатит миграцию.
+	// Старые вкладки, которые ещё не знают про base_updated_at, тоже
+	// попадают в rebase — это безопаснее, чем доверять их копии каркаса.
+	base := strings.TrimSpace(st.BaseUpdatedAt)
+	if base == "" {
+		base = strings.TrimSpace(r.FormValue("base_updated_at"))
 	}
-	p.Emoji = strings.TrimSpace(st.Emoji)
-	p.Balance = st.Balance
-	p.Notes = st.Notes
-	p.Options.Decimals = st.Decimals
-	p.Options.Numbered = true
-	p.Skeleton = st.Skeleton
-	p.Earned = st.Earned
-	p.Mults = st.Mults
-	if st.Source != "" {
-		p.Source = st.Source
-	}
-	if st.Shop != nil {
-		p.Shop = st.Shop
-	}
-	p.Picks = normalizePicks(p, st.Picks)
-	p.Deferred = normalizeDeferred(p, st.Deferred)
-	p.NotTaken = normalizeKeys(p, st.NotTaken)
-	if st.Ladders != nil {
-		p.Ladders = st.Ladders
-	}
-	if st.Accumulators != nil {
-		p.Accumulators = st.Accumulators
-	}
-	if st.Folios != nil {
-		p.Folios = st.Folios
-	}
-	if st.Requirements != nil {
-		p.Requirements = st.Requirements
-	}
-	if st.DeferredSlots > 0 {
-		p.DeferredSlots = st.DeferredSlots
+	rebased := !sameRevision(base, p.UpdatedAt)
+	var lost []string
+	if rebased {
+		lost = rebaseEditorState(p, &st)
+	} else {
+		applyEditorState(p, &st)
 	}
 	// Обязательные позиции каркаса доставляются в план (см. plan.Normalize).
 	p.Normalize()
@@ -202,12 +186,17 @@ func (s *Server) handlePlanSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if wantsJSON(r) {
+		if lost == nil {
+			lost = []string{}
+		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"ok":         true,
 			"updated_at": p.UpdatedAt,
 			"url":        "/plans/" + p.ID,
+			"rebased":    rebased,
+			"lost":       lost,
 		})
 		return
 	}
@@ -215,7 +204,15 @@ func (s *Server) handlePlanSave(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/plans/"+p.ID+"/export", http.StatusSeeOther)
 		return
 	}
-	s.flash(w, "План сохранён.")
+	if rebased {
+		msg := "Каркас обновился — план перенесён на серверную версию."
+		if len(lost) > 0 {
+			msg += fmt.Sprintf(" Потеряно позиций: %d.", len(lost))
+		}
+		s.flash(w, msg)
+	} else {
+		s.flash(w, "План сохранён.")
+	}
 	http.Redirect(w, r, "/plans/"+p.ID, http.StatusSeeOther)
 }
 

@@ -62,7 +62,10 @@ function stubFetch(w, responses) {
 }
 
 // bootPage поднимает страницу в jsdom и выполняет оба скрипта конструктора.
-function bootPage(p) {
+// opts.draft кладёт в localStorage черновик до запуска builder.js — так же,
+// как его нашла бы вкладка, открытая второй раз.
+function bootPage(p, opts) {
+  opts = opts || {};
   const page = new JSDOM(pageHtml(p), { runScripts: 'outside-only', url: 'https://kultyaska.test/plans/' + p.id });
   const w = page.window;
   w.confirm = () => true;
@@ -70,7 +73,8 @@ function bootPage(p) {
   w.HTMLFormElement.prototype.submit = function () {
     w.__submitted = w.document.getElementById('kt-state').value;
   };
-  stubFetch(w, [fakeResponse({ ok: true, updated_at: '2026-11-14T00:00:00Z' })]);
+  if (opts.draft) w.localStorage.setItem('kt-draft:' + p.id, JSON.stringify(opts.draft));
+  stubFetch(w, opts.responses || [fakeResponse({ ok: true, updated_at: '2026-11-14T00:00:00Z' })]);
   w.eval(fs.readFileSync(path.join(root, 'internal/web/static/engine.js'), 'utf8'));
   w.eval(fs.readFileSync(path.join(root, 'internal/web/static/builder.js'), 'utf8'));
   return w;
@@ -994,10 +998,217 @@ test('«ост.» в секциях идёт по порядку, даже ес�
   assert.strictEqual(d.getElementById('sum-left').textContent, '895', 'сайдбар сходится с секциями');
 });
 
-// --- сохранение через fetch: повторы и понятные ошибки ------------------
+// --- дельта-черновик в localStorage -------------------------------------
 
 const asyncTests = [];
 function testAsync(name, fn) { asyncTests.push({ name: name, fn: fn }); }
+
+/* makeDraft строит такой же черновик, какой builder.js кладёт в localStorage:
+   только действия игрока и ревизия сервера, без магазина и цен. */
+function makeDraft(p, overrides) {
+  return Object.assign({
+    v: 1,
+    plan_id: p.id,
+    base_updated_at: p.updated_at,
+    title: p.title,
+    emoji: p.emoji || '',
+    balance: p.balance,
+    notes: p.notes || '',
+    decimals: !!(p.options && p.options.decimals),
+    picks: (p.picks || []).map((x) => ({ key: x.key, qty: x.qty || 1 })),
+    deferred: (p.deferred || []).map((d) => ({ key: d.key, slot: d.slot || 1 })),
+    not_taken: (p.not_taken || []).slice(),
+    ladders: (p.ladders || []).map((l) => ({ key: l.key, value: l.value })),
+    accumulators: (p.accumulators || []).map((a) => ({ key: a.key, name: a.name || '', activate: !!a.activate })),
+    folios: (p.folios || []).map((f) => ({ key: f.key, name: f.name || '', take: !!f.take, deferred: !!f.deferred }))
+  }, overrides || {});
+}
+
+const draftKey = (p) => 'kt-draft:' + p.id;
+
+test('черновик хранит действия игрока и ревизию, но не магазин', () => {
+  const p = JSON.parse(JSON.stringify(plan));
+  const w = bootPage(p);
+  const d = w.document;
+
+  const title = d.getElementById('kt-title');
+  title.value = 'Правка в черновике';
+  title.dispatchEvent(new w.Event('input', { bubbles: true }));
+  pickIn(d, 'сама себе безоар');
+
+  const raw = w.localStorage.getItem(draftKey(p));
+  assert.ok(raw, 'черновик записан');
+  const draft = JSON.parse(raw);
+  assert.strictEqual(draft.base_updated_at, p.updated_at, 'запомнена ревизия сервера');
+  assert.strictEqual(draft.title, 'Правка в черновике', 'правка заголовка в черновике');
+  assert.ok(draft.picks.some((x) => x.key === 'lesson:sama_sebe_bezoar'), 'покупка в черновике');
+  assert.ok(!('shop' in draft), 'магазина в черновике нет');
+  assert.ok(!('skeleton' in draft), 'каркаса в черновике нет');
+  assert.ok(JSON.stringify(draft).indexOf('"cost"') < 0, 'цен в черновике нет');
+});
+
+test('черновик той же ревизии восстанавливается молча', () => {
+  const p = JSON.parse(JSON.stringify(plan));
+  const draft = makeDraft(p, {
+    title: 'Из черновика',
+    balance: 777,
+    picks: (p.picks || []).concat([{ key: 'lesson:sama_sebe_bezoar', qty: 1 }])
+  });
+  const w = bootPage(p, { draft: draft });
+  const d = w.document;
+
+  assert.strictEqual(d.getElementById('kt-title').value, 'Из черновика', 'заголовок вернулся');
+  assert.strictEqual(d.getElementById('kt-balance').value, '777', 'баланс вернулся');
+  assert.ok(rowByTitleIn(d, 'сама себе безоар').querySelector('.state.pick').className.indexOf('on') >= 0,
+    'покупка вернулась');
+  assert.strictEqual(d.getElementById('kt-draft-notice'), null, 'плашки с вопросом нет');
+  assert.strictEqual(d.getElementById('kt-dirty').hidden, false, 'восстановленное видно как несохранённое');
+});
+
+test('черновик чужого плана выбрасывается', () => {
+  const p = JSON.parse(JSON.stringify(plan));
+  const draft = makeDraft(p, { plan_id: 'другой-план', title: 'Чужой черновик' });
+  const w = bootPage(p, { draft: draft });
+  const d = w.document;
+
+  assert.strictEqual(d.getElementById('kt-title').value, p.title, 'чужой заголовок не применился');
+  assert.strictEqual(d.getElementById('kt-draft-notice'), null, 'спрашивать не о чем');
+  assert.strictEqual(w.localStorage.getItem(draftKey(p)), null, 'чужой черновик удалён');
+});
+
+test('ревизия сменилась — спрашиваем, а не затираем сервер', () => {
+  const p = JSON.parse(JSON.stringify(plan));
+  const draft = makeDraft(p, {
+    base_updated_at: '2020-01-01T00:00:00Z',
+    title: 'Из старого черновика',
+    balance: 321,
+    picks: (p.picks || []).concat([{ key: 'lesson:sama_sebe_bezoar', qty: 1 }, { key: 'lesson:gone' }]),
+    ladders: [{ key: 'talent.die', value: 25 }, { key: 'talent.flat', value: 999 }]
+  });
+  const w = bootPage(p, { draft: draft });
+  const d = w.document;
+
+  const notice = d.getElementById('kt-draft-notice');
+  assert.ok(notice, 'плашка видна');
+  assert.ok(/План обновлён на сервере/.test(notice.textContent), 'сказано, что план обновился');
+  assert.strictEqual(d.getElementById('kt-title').value, p.title, 'серверная версия не затёрта');
+  assert.ok(rowByTitleIn(d, 'сама себе безоар').querySelector('.state.pick').className.indexOf('on') < 0,
+    'покупка из старого черновика пока не применена');
+  assert.ok(w.localStorage.getItem(draftKey(p)), 'черновик ждёт решения');
+
+  const seen = [];
+  w.alert = (msg) => { seen.push(msg); };
+  const transfer = Array.prototype.find.call(notice.querySelectorAll('button'), (b) => b.textContent === 'Перенести');
+  assert.ok(transfer, 'есть кнопка «Перенести»');
+  transfer.click();
+
+  assert.strictEqual(d.getElementById('kt-draft-notice'), null, 'плашка исчезла');
+  assert.strictEqual(d.getElementById('kt-title').value, 'Из старого черновика', 'заголовок перенесён');
+  assert.strictEqual(d.getElementById('kt-balance').value, '321', 'баланс перенесён');
+  assert.ok(rowByTitleIn(d, 'сама себе безоар').querySelector('.state.pick').className.indexOf('on') >= 0,
+    'покупка перенесена');
+  assert.strictEqual(Number(d.querySelector('.row.ladder[data-ladder="talent.die"] .ladder-value').value), 25,
+    'значение шкалы перенесено');
+  assert.strictEqual(Number(d.querySelector('.row.ladder[data-ladder="talent.flat"] .ladder-value').value), 6,
+    'значение шкалы прижато к серверным границам');
+  assert.ok(/lesson:gone/.test(seen.join('\n')), 'про потерянную позицию сказано: ' + seen.join(' / '));
+  const after = JSON.parse(w.localStorage.getItem(draftKey(p)));
+  assert.strictEqual(after.base_updated_at, p.updated_at, 'черновик теперь на текущей ревизии');
+});
+
+test('«Выбросить» оставляет серверную версию', () => {
+  const p = JSON.parse(JSON.stringify(plan));
+  const draft = makeDraft(p, { base_updated_at: '2020-01-01T00:00:00Z', title: 'Не нужен', balance: 1 });
+  const w = bootPage(p, { draft: draft });
+  const d = w.document;
+
+  const notice = d.getElementById('kt-draft-notice');
+  const discard = Array.prototype.find.call(notice.querySelectorAll('button'), (b) => b.textContent === 'Выбросить');
+  assert.ok(discard, 'есть кнопка «Выбросить»');
+  discard.click();
+
+  assert.strictEqual(d.getElementById('kt-draft-notice'), null, 'плашка исчезла');
+  assert.strictEqual(d.getElementById('kt-title').value, p.title, 'осталась серверная версия');
+  assert.strictEqual(w.localStorage.getItem(draftKey(p)), null, 'черновик удалён');
+});
+
+testAsync('сохранение отправляет ревизию и убирает черновик', async () => {
+  const p = JSON.parse(JSON.stringify(plan));
+  const w = bootPage(p);
+  const d = w.document;
+
+  const title = d.getElementById('kt-title');
+  title.value = 'Сохраню';
+  title.dispatchEvent(new w.Event('input', { bubbles: true }));
+  assert.ok(w.localStorage.getItem(draftKey(p)), 'до сохранения черновик есть');
+
+  d.querySelector('.toolbar .btn:not(.ghost)').click();
+  await tick();
+
+  const body = w.__fetches[0].body;
+  const sent = JSON.parse(decodeURIComponent(body.slice(body.indexOf('state=') + 6)));
+  assert.strictEqual(sent.base_updated_at, p.updated_at, 'уехала ревизия, на которой собран черновик');
+  assert.strictEqual(w.localStorage.getItem(draftKey(p)), null, 'после успеха черновик больше не нужен');
+});
+
+testAsync('сервер перенёс план на новый каркас — видно потери и кнопку «Обновить»', async () => {
+  const p = JSON.parse(JSON.stringify(plan));
+  const w = bootPage(p);
+  const d = w.document;
+
+  const bal = d.getElementById('kt-balance');
+  bal.value = '123';
+  bal.dispatchEvent(new w.Event('input', { bubbles: true }));
+  stubFetch(w, [fakeResponse({
+    ok: true, updated_at: '2026-11-14T06:00:00Z',
+    rebased: true, lost: ['ученье — свет!']
+  })]);
+
+  d.querySelector('.toolbar .btn:not(.ghost)').click();
+  await tick();
+
+  const status = d.getElementById('kt-save-status');
+  assert.ok(/перенесён/.test(status.textContent), 'сказано, что план перенесён: ' + status.textContent);
+  assert.ok(/ученье — свет!/.test(status.textContent), 'перечислены потери');
+  const reload = Array.prototype.find.call(status.querySelectorAll('button'), (b) => b.textContent === 'Обновить');
+  assert.ok(reload, 'есть кнопка «Обновить»');
+  assert.strictEqual(d.getElementById('kt-dirty').hidden, true, 'план сохранён');
+  assert.strictEqual(w.localStorage.getItem(draftKey(p)), null, 'черновик убран');
+});
+
+testAsync('правки во время сохранения остаются в черновике', async () => {
+  const p = JSON.parse(JSON.stringify(plan));
+  const w = bootPage(p);
+  const d = w.document;
+
+  const title = d.getElementById('kt-title');
+  title.value = 'Первая';
+  title.dispatchEvent(new w.Event('input', { bubbles: true }));
+
+  let resolveSave = null;
+  w.fetch = function () {
+    return new Promise(function (resolve) { resolveSave = resolve; });
+  };
+
+  d.querySelector('.toolbar .btn:not(.ghost)').click();
+  await tick();
+
+  title.value = 'Вторая';
+  title.dispatchEvent(new w.Event('input', { bubbles: true }));
+  resolveSave(fakeResponse({ ok: true, updated_at: '2026-11-14T07:00:00Z' }));
+  await tick();
+  await tick();
+
+  const raw = w.localStorage.getItem(draftKey(p));
+  assert.ok(raw, 'черновик остался');
+  const draft = JSON.parse(raw);
+  assert.strictEqual(draft.title, 'Вторая', 'в черновике новая правка');
+  assert.strictEqual(draft.base_updated_at, '2026-11-14T07:00:00Z', 'черновик сел на новую ревизию');
+  assert.strictEqual(d.getElementById('kt-dirty').hidden, false, 'видно, что есть несохранённое');
+  assert.ok(/новые правки/.test(d.getElementById('kt-save-status').textContent), d.getElementById('kt-save-status').textContent);
+});
+
+// --- сохранение через fetch: повторы и понятные ошибки ------------------
 
 // tick даёт промисам провернуться: fetch-заглушка отвечает сразу.
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
