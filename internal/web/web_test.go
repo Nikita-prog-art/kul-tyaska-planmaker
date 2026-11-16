@@ -192,7 +192,7 @@ func TestFullFlow(t *testing.T) {
 		t.Errorf("в .txt нет блока невыученных:\n%s", txt)
 	}
 	// Урок с фиксированной ценой не занимает номер.
-	if !strings.Contains(string(txt), "1. демонические культиваторы — зло: 5") {
+	if !strings.Contains(string(txt), "1. демонические культиваторы — зло\n") {
 		t.Errorf("нумерация уроков считается неверно:\n%s", txt)
 	}
 }
@@ -454,7 +454,7 @@ func TestLife9Preset(t *testing.T) {
 	txt, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	for _, want := range []string{
-		"Уроки: 1. скидка на скидку: 5, 2. призраки: 10, 3. глубоко невыученные: 15, 4. форель: 20, 5. Варан: 25",
+		"Уроки: 1. скидка на скидку, 2. призраки, 3. глубоко невыученные, 4. форель, 5. Варан",
 		"Уроки с фиксированной ценой: Пальма: 1, Цао: 5",
 		"Месть: Дживан: 60",
 		"Тренировки и навыки: кастеты: 0",
@@ -470,6 +470,13 @@ func TestLife9Preset(t *testing.T) {
 	}
 	if strings.Contains(string(txt), "Проверки:") {
 		t.Errorf("в плане не должно быть проверок:\n%s", txt)
+	}
+	// В секциях остаток целый: дроби есть только в общем итоге.
+	sectionTail := regexp.MustCompile(`(?m)^  Сумма: .*, ост\. -?\d+$`)
+	for _, line := range strings.Split(string(txt), "\n") {
+		if strings.HasPrefix(line, "  Сумма: ") && !sectionTail.MatchString(line) {
+			t.Errorf("в остатке секции есть дробная часть: %q", line)
+		}
 	}
 }
 
@@ -641,8 +648,8 @@ func TestLessonOrderSurvivesSave(t *testing.T) {
 	resp.Body.Close()
 	text := string(txt)
 	for _, want := range []string{
-		"2. пинг систем: 10",
-		"3. ученье: 15",
+		"2. пинг систем,",
+		"3. ученье\n",
 		"«пинг систем» требует минимум 10-й урок, а стоит 2-м",
 	} {
 		if !strings.Contains(text, want) {

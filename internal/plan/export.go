@@ -37,7 +37,9 @@ func Render(p *Plan, s *Summary) string {
 			continue
 		}
 		fmt.Fprintf(&b, "%s: %s\n", sec.Title, strings.Join(parts, ", "))
-		fmt.Fprintf(&b, "  Сумма: %s, ост. %s\n\n", money(p, sec.Sum), money(p, sec.Remainder))
+		// Дроби в остатке видны только в общем итоге: по секциям они
+		// мешали читать план, а точная цифра всё равно есть в конце.
+		fmt.Fprintf(&b, "  Сумма: %s, ост. %d\n\n", money(p, sec.Sum), rounded(sec.Remainder))
 	}
 
 	// Накопители и фолианты — по строке, как и остальные разделы.
@@ -93,15 +95,19 @@ func Render(p *Plan, s *Summary) string {
 	return b.String()
 }
 
-// lineText печатает одну позицию плана: «1. Мелисандра: 5 (уже куплено)»,
+// lineText печатает одну позицию плана: «1. Мелисандра (уже куплено)»,
 // «водное тело: 0», «хардкор: 20», «корни мин 50%: 481».
+//
+// У нумеруемого урока цену не пишем: она известна по порядку (пятый урок —
+// 5 XP) и только удлиняла строку. У фиксированной цены порядок ничего
+// не говорит, поэтому там цена остаётся.
 func lineText(p *Plan, l Line) string {
 	name := lineName(l)
 	if l.Qty > 1 {
 		name = fmt.Sprintf("%s ×%d", name, l.Qty)
 	}
 	if l.Number > 0 {
-		return fmt.Sprintf("%d. %s: %s%s", l.Number, name, money(p, l.Cost), noteSuffix(l.Note))
+		return fmt.Sprintf("%d. %s%s", l.Number, name, noteSuffix(l.Note))
 	}
 	return fmt.Sprintf("%s: %s%s", name, money(p, l.Cost), noteSuffix(l.Note))
 }
@@ -159,7 +165,7 @@ func num(p *Plan, v float64) string {
 // money форматирует стоимость (без суффикса XP).
 func money(p *Plan, v float64) string {
 	if !p.Options.Decimals {
-		return fmt.Sprintf("%d", int64(v+0.5*sign(v)))
+		return fmt.Sprintf("%d", rounded(v))
 	}
 	return comma(v, 5, true)
 }
@@ -167,9 +173,15 @@ func money(p *Plan, v float64) string {
 // tail форматирует итоговый остаток: дроби оставляем всегда, если включены.
 func tail(p *Plan, v float64) string {
 	if !p.Options.Decimals {
-		return fmt.Sprintf("%d", int64(v+0.5*sign(v)))
+		return fmt.Sprintf("%d", rounded(v))
 	}
 	return comma(v, 5, true)
+}
+
+// rounded округляет до целого, как это делает выгрузка без дробей:
+// половина уходит от нуля, чтобы перерасход не выглядел меньше.
+func rounded(v float64) int64 {
+	return int64(v + 0.5*sign(v))
 }
 
 func sign(v float64) float64 {

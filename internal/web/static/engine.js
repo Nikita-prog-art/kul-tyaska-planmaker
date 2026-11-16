@@ -478,7 +478,9 @@
       });
       if (!parts.length) return;
       out.push(sec.title + ': ' + parts.join(', '));
-      out.push('  Сумма: ' + fmt(sec.sum, dec) + ', ост. ' + fmt(sec.remainder, dec));
+      // Дроби в остатке видны только в общем итоге: по секциям они
+      // мешали читать план, а точная цифра всё равно есть в конце.
+      out.push('  Сумма: ' + fmt(sec.sum, dec) + ', ост. ' + fmt(sec.remainder, false));
       out.push('');
     });
 
@@ -535,11 +537,13 @@
     return out.join('\n') + '\n';
   }
 
-  /* lineText — одна позиция плана в выгрузке: «1. Мелисандра: 5». */
+  /* lineText — одна позиция плана в выгрузке: «1. Мелисандра», «хардкор: 20».
+     У нумеруемого урока цену не пишем: она известна по порядку, а строку
+     только удлиняет. У фиксированной цены порядок ничего не говорит. */
   function lineText(l, dec) {
     var name = l.short || l.title;
     if (l.qty > 1) name += ' ×' + l.qty;
-    if (l.number > 0) return l.number + '. ' + name + ': ' + fmt(l.cost, dec) + noteSuffix(l.note);
+    if (l.number > 0) return l.number + '. ' + name + noteSuffix(l.note);
     return name + ': ' + fmt(l.cost, dec) + noteSuffix(l.note);
   }
 

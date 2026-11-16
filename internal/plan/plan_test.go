@@ -242,18 +242,35 @@ func TestFixedLessonsHaveOwnSection(t *testing.T) {
 	if !strings.Contains(txt, "Уроки с фиксированной ценой:") {
 		t.Errorf("в тексте плана нет раздела фиксированных уроков:\n%s", txt)
 	}
-	// Уроки идут одной строкой: «Уроки: 1. … — 5, 2. … — 10».
+	// Уроки идут одной строкой: «Уроки: 1. …, 2. …».
 	var lessonLines int
 	for _, line := range strings.Split(txt, "\n") {
 		if strings.HasPrefix(line, "Уроки: ") {
 			lessonLines++
+			// У нумеруемого урока цену не пишем: она известна по порядку,
+			// а точная сумма всё равно есть строкой ниже.
+			if i := strings.Index(line[len("Уроки: "):], ": "); i >= 0 {
+				t.Errorf("у нумеруемого урока напечатана цена: %q", line)
+			}
 		}
 	}
 	if lessonLines != 1 {
 		t.Errorf("ждал одну строку уроков, получил %d:\n%s", lessonLines, txt)
 	}
+	// У фиксированной цены порядок ничего не говорит — цена остаётся.
 	if !strings.Contains(txt, "Уроки с фиксированной ценой: Дева: 5") {
 		t.Errorf("фиксированный урок не напечатан своей строкой:\n%s", txt)
+	}
+	// Остаток в секции целый, дроби — только в общем итоге.
+	for _, line := range strings.Split(txt, "\n") {
+		if !strings.HasPrefix(line, "  Сумма: ") {
+			continue
+		}
+		if i := strings.Index(line, ", ост. "); i < 0 {
+			t.Errorf("в строке секции нет остатка: %q", line)
+		} else if strings.Contains(line[i+len(", ост. "):], ",") {
+			t.Errorf("в остатке секции есть дробная часть: %q", line)
+		}
 	}
 }
 
@@ -402,12 +419,12 @@ func TestExportOneLinePerSection(t *testing.T) {
 }
 
 // TestExportUsesShortNames — в выгрузке позиции называются коротко:
-// «1. Мелисандра: 5», а не «1. поцелуй Мелисандры: 5».
+// «1. Мелисандра», а не «1. поцелуй Мелисандры».
 func TestExportUsesShortNames(t *testing.T) {
 	p := fixturePlan(t)
 	txt := plan.Render(p, plan.Compute(p))
 
-	for _, want := range []string{"1. Мелисандра: 5", "Туман: 35", "Джон Сноу: 200", "корни мин 50%: 481", "Беру с собой: Туман"} {
+	for _, want := range []string{"1. Мелисандра (уже куплено)", "7. Туман", "Джон Сноу: 200", "корни мин 50%: 481", "Беру с собой: Туман"} {
 		if !strings.Contains(txt, want) {
 			t.Errorf("в выгрузке нет %q:\n%s", want, txt)
 		}
